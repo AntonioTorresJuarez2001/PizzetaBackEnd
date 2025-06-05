@@ -6,9 +6,14 @@ from .models import Pizzeria, Venta
 class PizzeriaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pizzeria
-        fields = ["id", "nombre"]
+        fields = ["id", "nombre", "direccion", "telefono"]
+        extra_kwargs = {
+            "nombre": {"required": True},
+            "direccion": {"required": False, "allow_null": True, "allow_blank": True},
+            "telefono": {"required": False, "allow_null": True, "allow_blank": True},
+        }
 
 class VentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Venta
-        fields = ["id", "fecha", "total"]
+        fields = ["id", "fecha", "total", "metodo_pago"]
