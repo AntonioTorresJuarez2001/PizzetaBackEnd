@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-
+from django.db.models import Sum
 from .models import Pizzeria, Venta, DuenoPizzeria
 from .serializers import PizzeriaSerializer, VentaSerializer
 
@@ -16,20 +16,19 @@ from .serializers import PizzeriaSerializer, VentaSerializer
 
 class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
     """
-    GET  /api/pizzerias/       -> Lista las pizzerías donde el usuario es dueño.
-    POST /api/pizzerias/       -> Crea una nueva pizzería y asigna al usuario como dueño.
+    GET  /api/pizzerias/  -> Lista las pizzerías donde el usuario es dueño, 
+                             con un campo extra `total_ventas`.
+    POST /api/pizzerias/  -> Crea una nueva pizzería y asigna al usuario como dueño.
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PizzeriaSerializer
 
     def get_queryset(self):
-        # Sólo aquellas pizzerías en las que request.user aparece en DuenoPizzeria
-        return Pizzeria.objects.filter(dueño_asignaciones__dueno=self.request.user)
-
-    def perform_create(self, serializer):
-        # Al crear la pizzería, asignamos el dueño actual
-        p = serializer.save()
-        DuenoPizzeria.objects.create(dueno=self.request.user, pizzeria=p)
+        # Filtramos sólo las pizzerías donde el usuario es dueño...
+        qs = Pizzeria.objects.filter(dueño_asignaciones__dueno=self.request.user)
+        # ...y anotamos en cada objeto el total sumado de sus ventas:
+        qs = qs.annotate(total_ventas=Sum("ventas__total"))
+        return qs
 
 
 class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
