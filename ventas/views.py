@@ -10,6 +10,9 @@ from .models import Pizzeria, Venta, DuenoPizzeria
 from .serializers import PizzeriaSerializer, VentaSerializer
 
 
+
+
+
 # ————————————————————————————————————————————————————————————————
 # 1) CRUD de Pizzerías
 # ————————————————————————————————————————————————————————————————
@@ -29,6 +32,16 @@ class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
         # ...y anotamos en cada objeto el total sumado de sus ventas:
         qs = qs.annotate(total_ventas=Sum("ventas__total"))
         return qs
+    
+    def perform_create(self, serializer):
+    # Guardamos primero la pizzería
+        pizzeria = serializer.save()
+    
+    # Luego la asociamos al usuario actual como dueño
+        DuenoPizzeria.objects.create(
+            dueno=self.request.user,
+            pizzeria=pizzeria
+        )
 
 
 class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
