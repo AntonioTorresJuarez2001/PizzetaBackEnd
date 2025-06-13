@@ -6,6 +6,7 @@ from .views import (
     PizzeriaRetrieveUpdateDestroyAPIView,
     VentaListCreateAPIView,
     VentaRetrieveUpdateDestroyAPIView,
+    ProductoListCreateAPIView
 )
 
 urlpatterns = [
@@ -14,4 +15,7 @@ urlpatterns = [
     path("pizzerias/<int:pizzeria_id>/", PizzeriaRetrieveUpdateDestroyAPIView.as_view(), name="detalle-pizzeria"),
     path("pizzerias/<int:pizzeria_id>/ventas/", VentaListCreateAPIView.as_view(), name="ventas-list-create"),
     path("ventas/<int:venta_id>/", VentaRetrieveUpdateDestroyAPIView.as_view(), name="venta-detalle"),
+    # al final de urlpatterns:
+    path("productos/", ProductoListCreateAPIView.as_view(), name="productos-list-create"),
+
 ]

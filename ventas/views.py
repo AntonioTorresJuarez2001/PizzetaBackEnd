@@ -8,7 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum
 from .models import Pizzeria, Venta, DuenoPizzeria
 from .serializers import PizzeriaSerializer, VentaSerializer
-
+from .models import Producto
+from .serializers import ProductoSerializer
 
 
 
@@ -120,3 +121,8 @@ def current_user(request):
         "username": user.username,
         "email": user.email,
     })
+
+class ProductoListCreateAPIView(generics.ListCreateAPIView):
+    queryset = Producto.objects.all()
+    serializer_class = ProductoSerializer
+    permission_classes = [permissions.IsAuthenticated]
