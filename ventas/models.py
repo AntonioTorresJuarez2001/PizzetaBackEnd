@@ -133,7 +133,7 @@ class VentaProducto(models.Model):
         db_table = "venta_producto"
         verbose_name = "Item de Venta"
         verbose_name_plural = "Items de Venta"
-        unique_together = ("venta", "producto")
+        #unique_together = ("venta", "producto")
 
     def __str__(self):
         return f"{self.cantidad}× {self.producto.nombre} en Venta #{self.venta.id}"
