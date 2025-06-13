@@ -54,7 +54,6 @@ class VentaSerializer(serializers.ModelSerializer):
         model = Venta
         fields = [
             'id',
-            'pizzeria',
             'dueno',
             'fecha',
             'total',
