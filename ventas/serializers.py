@@ -1,6 +1,7 @@
 # ventas/serializers.py
 
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 from .models import Pizzeria, Venta, Producto, VentaProducto
 
 # ————————————————————————————————————————————————————————————————
@@ -27,6 +28,8 @@ class PizzeriaSerializer(serializers.ModelSerializer):
 # 2) Serializadores nuevos para Producto y VentaProducto
 # ————————————————————————————————————————————————————————————————
 class ProductoSerializer(serializers.ModelSerializer):
+    pizzeria = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Producto
         fields = [
@@ -36,6 +39,8 @@ class ProductoSerializer(serializers.ModelSerializer):
             'categoria',
             'descripcion',
             'activo',
+            'pizzeria',
+            'created_at',
         ]
         extra_kwargs = {
             'categoria': {'required': True, 'allow_blank': False},

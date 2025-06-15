@@ -6,10 +6,9 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum
-from .models import Pizzeria, Venta, DuenoPizzeria
-from .serializers import PizzeriaSerializer, VentaSerializer
-from .models import Producto
-from .serializers import ProductoSerializer
+from .models import Pizzeria, Venta, DuenoPizzeria, Producto
+from .serializers import PizzeriaSerializer, VentaSerializer, ProductoSerializer
+
 
 
 
@@ -138,3 +137,22 @@ class ProductoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
     serializer_class = ProductoSerializer
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'pk'
+
+class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
+    """
+    GET  /api/pizzerias/{pizzeria_id}/productos/  -> Lista productos de esa pizzería (si es dueño).
+    POST /api/pizzerias/{pizzeria_id}/productos/  -> Crea producto asociado a esa misma pizzería.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProductoSerializer
+
+    def get_queryset(self):
+        pizzeria_id = self.kwargs["pizzeria_id"]
+        # Validar que el usuario sea dueño de esa pizzería
+        DuenoPizzeria.objects.get(dueno=self.request.user, pizzeria_id=pizzeria_id)
+        return Producto.objects.filter(pizzeria_id=pizzeria_id)
+
+    def perform_create(self, serializer):
+        pizzeria_id = self.kwargs["pizzeria_id"]
+        DuenoPizzeria.objects.get(dueno=self.request.user, pizzeria_id=pizzeria_id)
+        serializer.save(pizzeria_id=pizzeria_id)

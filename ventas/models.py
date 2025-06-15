@@ -47,8 +47,16 @@ class DuenoPizzeria(models.Model):
 class Producto(models.Model):
     """
     Catálogo de productos que se pueden vender.
-    Ahora con categoría, descripción y activo.
+    Ahora cada producto pertenece a una Pizzería y tiene:
+      - categoria: string
+      - descripcion: text (opcional)
+      - activo: boolean
     """
+    pizzeria    = models.ForeignKey(
+        Pizzeria,
+        on_delete=models.CASCADE,
+        related_name="productos"
+    )
     nombre      = models.CharField(max_length=100)
     precio      = models.DecimalField(max_digits=8, decimal_places=2)
 
@@ -74,7 +82,7 @@ class Producto(models.Model):
         verbose_name_plural = "Productos"
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} ({self.pizzeria.nombre})"
 
 
 class Venta(models.Model):
