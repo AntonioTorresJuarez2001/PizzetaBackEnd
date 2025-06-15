@@ -47,10 +47,26 @@ class DuenoPizzeria(models.Model):
 class Producto(models.Model):
     """
     Catálogo de productos que se pueden vender.
+    Ahora con categoría, descripción y activo.
     """
-    nombre   = models.CharField(max_length=100)
-    precio   = models.DecimalField(max_digits=8, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True)
+    nombre      = models.CharField(max_length=100)
+    precio      = models.DecimalField(max_digits=8, decimal_places=2)
+
+    categoria   = models.CharField(
+        max_length=50,
+        help_text="Categoría del producto (ej. Pizza, Bebida, Postre)"
+    )
+    descripcion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Descripción detallada del producto (opcional)"
+    )
+    activo      = models.BooleanField(
+        default=True,
+        help_text="¿Está disponible para la venta?"
+    )
+
+    created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "producto"

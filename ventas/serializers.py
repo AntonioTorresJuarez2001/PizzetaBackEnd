@@ -29,7 +29,19 @@ class PizzeriaSerializer(serializers.ModelSerializer):
 class ProductoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Producto
-        fields = ['id', 'nombre', 'precio']
+        fields = [
+            'id',
+            'nombre',
+            'precio',
+            'categoria',
+            'descripcion',
+            'activo',
+        ]
+        extra_kwargs = {
+            'categoria': {'required': True, 'allow_blank': False},
+            'descripcion': {'required': False, 'allow_blank': True},
+            'activo': {'required': True},
+        }
 
 
 class VentaProductoSerializer(serializers.ModelSerializer):

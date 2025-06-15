@@ -126,3 +126,15 @@ class ProductoListCreateAPIView(generics.ListCreateAPIView):
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+class ProductoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET    /api/productos/{pk}/   -> Recupera un producto
+    PUT    /api/productos/{pk}/   -> Actualiza un producto
+    PATCH  /api/productos/{pk}/   -> Actualiza parcialmente
+    DELETE /api/productos/{pk}/   -> Elimina un producto
+    """
+    queryset = Producto.objects.all()
+    serializer_class = ProductoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
