@@ -141,7 +141,7 @@ class VentaProducto(models.Model):
     )
     producto  = models.ForeignKey(
         Producto,
-        on_delete=models.PROTECT
+        on_delete=models.CASCADE
     )
     cantidad  = models.PositiveIntegerField()
 
