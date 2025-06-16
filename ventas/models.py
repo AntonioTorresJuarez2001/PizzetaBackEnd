@@ -114,16 +114,8 @@ class Venta(models.Model):
     )
     fecha        = models.DateTimeField(auto_now_add=True)
     total        = models.DecimalField(max_digits=10, decimal_places=2)
-    canal        = models.CharField(
-        max_length=12,
-        choices=CANALES,
-        default='MOSTRADOR'
-    )
-    metodo_pago  = models.CharField(
-        max_length=10,
-        choices=[("EFECTIVO", "Efectivo"), ("TARJETA", "Tarjeta"), ("OTRO", "Otro")],
-        default="EFECTIVO"
-    )
+    canal = models.CharField(max_length=50, default="MOSTRADOR")  # Puedes ajustar el max_length según lo que esperes
+    metodo_pago = models.CharField(max_length=50,default="EFECTIVO")
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)
 

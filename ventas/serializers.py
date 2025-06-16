@@ -1,12 +1,9 @@
-# ventas/serializers.py
-
 from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
 from .models import Pizzeria, Venta, Producto, VentaProducto
 
-# ————————————————————————————————————————————————————————————————
-# 1) Serializador de Pizzería (igual que antes)
-# ————————————————————————————————————————————————————————————————
+# ————————————————————————————————————————————
+# Serializador de Pizzería
+# ————————————————————————————————————————————
 class PizzeriaSerializer(serializers.ModelSerializer):
     total_ventas = serializers.DecimalField(
         max_digits=12,
@@ -24,9 +21,9 @@ class PizzeriaSerializer(serializers.ModelSerializer):
         }
 
 
-# ————————————————————————————————————————————————————————————————
-# 2) Serializadores nuevos para Producto y VentaProducto
-# ————————————————————————————————————————————————————————————————
+# ————————————————————————————————————————————
+# Serializador de Producto
+# ————————————————————————————————————————————
 class ProductoSerializer(serializers.ModelSerializer):
     pizzeria = serializers.PrimaryKeyRelatedField(read_only=True)
 
@@ -49,6 +46,9 @@ class ProductoSerializer(serializers.ModelSerializer):
         }
 
 
+# ————————————————————————————————————————————
+# Serializador para cada producto vendido dentro de una venta
+# ————————————————————————————————————————————
 class VentaProductoSerializer(serializers.ModelSerializer):
     producto = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all())
     producto_detalle = ProductoSerializer(source='producto', read_only=True)
@@ -58,13 +58,11 @@ class VentaProductoSerializer(serializers.ModelSerializer):
         fields = ['producto', 'producto_detalle', 'cantidad']
 
 
-# ————————————————————————————————————————————————————————————————
-# 3) Serializador de Venta extendido
-# ————————————————————————————————————————————————————————————————
+# ————————————————————————————————————————————
+# Serializador principal de Venta con validaciones y cálculo de total
+# ————————————————————————————————————————————
 class VentaSerializer(serializers.ModelSerializer):
-    # Nuevo campo canal (asegúrate de definir CANALES en tu modelo Venta)
-    canal = serializers.ChoiceField(choices=Venta.CANALES, required=True)
-    # Anidado: las líneas de producto
+    canal = serializers.CharField()
     items = VentaProductoSerializer(many=True)
 
     class Meta:
@@ -78,12 +76,41 @@ class VentaSerializer(serializers.ModelSerializer):
             'metodo_pago',
             'items',
         ]
-        read_only_fields = ['id', 'dueno', 'fecha']
+        read_only_fields = ['id', 'dueno', 'fecha', 'total']
+
+    def validate_items(self, items):
+        """
+        Validar que cada item tenga cantidad > 0 y que el producto esté activo.
+        """
+        if not items:
+            raise serializers.ValidationError("La venta debe contener al menos un producto.")
+
+        for item in items:
+            cantidad = item.get('cantidad', 0)
+            producto = item.get('producto')
+
+            if cantidad <= 0:
+                raise serializers.ValidationError(
+                    f"La cantidad para el producto {producto} debe ser mayor a cero."
+                )
+            if not producto.activo:
+                raise serializers.ValidationError(
+                    f"El producto '{producto.nombre}' no está activo y no puede ser vendido."
+                )
+        return items
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
-        # pizzeria y dueno los inyecta la vista en perform_create
+
+        # Recalcular total automáticamente ignorando lo enviado por el cliente
+        total = sum(
+            item['producto'].precio * item['cantidad']
+            for item in items_data
+        )
+        validated_data['total'] = total
+
         venta = Venta.objects.create(**validated_data)
+
         for item in items_data:
             VentaProducto.objects.create(
                 venta=venta,
@@ -95,13 +122,18 @@ class VentaSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
 
-        # Actualizar campos básicos
+        if items_data is not None:
+            total = sum(
+                item['producto'].precio * item['cantidad']
+                for item in items_data
+            )
+            validated_data['total'] = total
+
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
         instance.save()
 
         if items_data is not None:
-            # Reemplazar todas las líneas
             instance.items.all().delete()
             for item in items_data:
                 VentaProducto.objects.create(
