@@ -6,10 +6,12 @@ from .views import (
     VentaListCreateAPIView,
     VentaRetrieveUpdateDestroyByPizzeriaAPIView,  # Usamos solo esta
     ProductoListCreateByPizzeriaAPIView,
+    resumen_ventas,
     ProductoRetrieveUpdateDestroyByPizzeriaAPIView,
 )
 
 urlpatterns = [
+    path("ventas/resumen/", resumen_ventas, name="resumen-ventas"),
     path("user/", current_user, name="current-user"),
 
     # Pizzerías

@@ -5,12 +5,52 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Sum, ProtectedError
+from datetime import datetime
+from django.utils.timezone import now, timedelta
 from .models import Pizzeria, Venta, DuenoPizzeria, Producto
 from .serializers import (
     PizzeriaSerializer,
     VentaSerializer,
     ProductoSerializer
 )
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def resumen_ventas(request):
+    user = request.user
+    rango = request.query_params.get("rango", "total")
+    inicio_str = request.query_params.get("inicio")
+    fin_str = request.query_params.get("fin")
+
+    hoy = now().date()
+    inicio = None
+    fin = hoy + timedelta(days=1)
+
+    if rango == "hoy":
+        inicio = hoy
+    elif rango == "ayer":
+        inicio = hoy - timedelta(days=1)
+        fin = hoy
+    elif rango == "semana":
+        inicio = hoy - timedelta(days=7)
+    elif rango == "personalizado" and inicio_str and fin_str:
+        try:
+            inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date()
+            fin = datetime.strptime(fin_str, "%Y-%m-%d").date() + timedelta(days=1)
+        except ValueError:
+            return Response({"error": "Fechas inválidas."}, status=400)
+
+    ventas = Venta.objects.filter(pizzeria__dueño_asignaciones__dueno=user)
+    if inicio:
+        ventas = ventas.filter(fecha__date__gte=inicio, fecha__date__lt=fin)
+
+    total = ventas.aggregate(total=Sum("total"))["total"] or 0
+
+    return Response({
+        "rango": rango,
+        "total": float(total),
+        "desde": str(inicio) if inicio else "todo",
+        "hasta": str(fin) if inicio else "todo"
+    })
 
 # ————————————————————————————————————————————————————————————————
 # Utilidad para verificar si un usuario es dueño de una pizzería
