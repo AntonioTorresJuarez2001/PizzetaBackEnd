@@ -12,7 +12,7 @@ class Pizzeria(models.Model):
     updated_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "pizzería"
+        db_table = "pizzeria"
         verbose_name = "Pizzería"
         verbose_name_plural = "Pizzerías"
 
@@ -23,19 +23,19 @@ class DuenoPizzeria(models.Model):
     dueno      = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        db_column="dueño_id",
+        db_column="dueno_id",
         related_name="pizzeria_asignaciones"
     )
     pizzeria   = models.ForeignKey(
         Pizzeria,
         on_delete=models.CASCADE,
-        db_column="pizzería_id",
-        related_name="dueño_asignaciones"
+        db_column="pizzeria_id",
+        related_name="dueno_asignaciones"
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "dueño_pizzería"
+        db_table = "dueno_pizzeria"
         unique_together = ("dueno", "pizzeria")
         verbose_name = "Asignación Dueño-Pizzería"
         verbose_name_plural = "Asignaciones Dueño-Pizzería"
@@ -103,20 +103,23 @@ class Venta(models.Model):
     pizzeria     = models.ForeignKey(
         Pizzeria,
         on_delete=models.CASCADE,
-        db_column="pizzería_id",
+        db_column="pizzeria_id",
         related_name="ventas"
     )
     dueno        = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        db_column="dueño_id",
+        db_column="dueno_id",
         related_name="ventas_registradas"
     )
-    #fecha        = models.DateTimeField()
     fecha        = models.DateTimeField(auto_now_add=True)
     total        = models.DecimalField(max_digits=10, decimal_places=2)
-    canal = models.CharField(max_length=50, default="MOSTRADOR")  # Puedes ajustar el max_length según lo que esperes
-    metodo_pago = models.CharField(max_length=50,default="EFECTIVO")
+    canal        = models.CharField(
+        max_length=50,
+        choices=CANALES,
+        default="MOSTRADOR"
+    )
+    metodo_pago  = models.CharField(max_length=50, default="EFECTIVO")
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)
 

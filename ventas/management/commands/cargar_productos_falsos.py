@@ -47,7 +47,7 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Usuario '{username}' no encontrado"))
             return
 
-        pizzerias = Pizzeria.objects.filter(dueño_asignaciones__dueno=user)
+        pizzerias = Pizzeria.objects.filter(dueno_asignaciones__dueno=user)
         if not pizzerias.exists():
             self.stderr.write(self.style.ERROR(f"No hay pizzerías asignadas a '{username}'"))
             return

@@ -39,7 +39,7 @@ def resumen_ventas(request):
         except ValueError:
             return Response({"error": "Fechas inválidas."}, status=400)
 
-    ventas = Venta.objects.filter(pizzeria__dueño_asignaciones__dueno=user)
+    ventas = Venta.objects.filter(pizzeria__dueno_asignaciones__dueno=user)
     if inicio:
         ventas = ventas.filter(fecha__date__gte=inicio, fecha__date__lt=fin)
 
@@ -69,7 +69,7 @@ class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return Pizzeria.objects.filter(
-            dueño_asignaciones__dueno=self.request.user
+            dueno_asignaciones__dueno=self.request.user
         ).annotate(total_ventas=Sum("ventas__total"))
 
     def perform_create(self, serializer):
@@ -87,7 +87,7 @@ class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
 
     def get_queryset(self):
         return Pizzeria.objects.filter(
-            dueño_asignaciones__dueno=self.request.user
+            dueno_asignaciones__dueno=self.request.user
         )
 
 # ————————————————————————————————————————————————————————————————
@@ -116,7 +116,7 @@ class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Venta.objects.filter(
-            pizzeria__dueño_asignaciones__dueno=self.request.user
+            pizzeria__dueno_asignaciones__dueno=self.request.user
         )
 
 

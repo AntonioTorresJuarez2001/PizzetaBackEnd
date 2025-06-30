@@ -21,7 +21,7 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"Usuario '{username}' no existe"))
             return
 
-        pizzerias = Pizzeria.objects.filter(dueño_asignaciones__dueno=user)
+        pizzerias = Pizzeria.objects.filter(dueno_asignaciones__dueno=user)
         if not pizzerias.exists():
             self.stdout.write(self.style.WARNING("⚠️ Usuario no tiene pizzerías asignadas."))
             return
