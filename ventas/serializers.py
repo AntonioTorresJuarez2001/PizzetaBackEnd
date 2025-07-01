@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Pizzeria, Venta, Producto, VentaProducto
+from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa
 
 # ————————————————————————————————————————————
 # Serializador de Pizzería
@@ -63,6 +63,7 @@ class VentaProductoSerializer(serializers.ModelSerializer):
 # ————————————————————————————————————————————
 class VentaSerializer(serializers.ModelSerializer):
     canal = serializers.CharField()
+    dueno = serializers.HiddenField(default=serializers.CurrentUserDefault())
     items = VentaProductoSerializer(many=True)
 
     class Meta:
@@ -142,3 +143,13 @@ class VentaSerializer(serializers.ModelSerializer):
                     cantidad=item['cantidad']
                 )
         return instance
+
+class VentaEtapaSerializer(serializers.ModelSerializer):
+    etapa_display = serializers.CharField(source='get_etapa_display', read_only=True)
+
+    class Meta:
+        model = VentaEtapa
+        fields = ['id', 'venta', 'etapa', 'etapa_display', 'timestamp']
+        read_only_fields = ['id']
+
+

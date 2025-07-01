@@ -1,68 +1,40 @@
+# ventas/views.py
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.db.models import Sum, ProtectedError
 from datetime import datetime
 from django.utils.timezone import now, timedelta
-from .models import Pizzeria, Venta, DuenoPizzeria, Producto
+from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa
 from .serializers import (
     PizzeriaSerializer,
     VentaSerializer,
-    ProductoSerializer
+    ProductoSerializer,
+    VentaEtapaSerializer
 )
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def resumen_ventas(request):
-    user = request.user
-    rango = request.query_params.get("rango", "total")
-    inicio_str = request.query_params.get("inicio")
-    fin_str = request.query_params.get("fin")
 
-    hoy = now().date()
-    inicio = None
-    fin = hoy + timedelta(days=1)
-
-    if rango == "hoy":
-        inicio = hoy
-    elif rango == "ayer":
-        inicio = hoy - timedelta(days=1)
-        fin = hoy
-    elif rango == "semana":
-        inicio = hoy - timedelta(days=7)
-    elif rango == "personalizado" and inicio_str and fin_str:
-        try:
-            inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date()
-            fin = datetime.strptime(fin_str, "%Y-%m-%d").date() + timedelta(days=1)
-        except ValueError:
-            return Response({"error": "Fechas inválidas."}, status=400)
-
-    ventas = Venta.objects.filter(pizzeria__dueno_asignaciones__dueno=user)
-    if inicio:
-        ventas = ventas.filter(fecha__date__gte=inicio, fecha__date__lt=fin)
-
-    total = ventas.aggregate(total=Sum("total"))["total"] or 0
-
-    return Response({
-        "rango": rango,
-        "total": float(total),
-        "desde": str(inicio) if inicio else "todo",
-        "hasta": str(fin) if inicio else "todo"
-    })
-
-# ————————————————————————————————————————————————————————————————
-# Utilidad para verificar si un usuario es dueño de una pizzería
-# ————————————————————————————————————————————————————————————————
+# Utilidad para validar dueño de pizzería
 def check_dueno(user, pizzeria_id):
     if not DuenoPizzeria.objects.filter(dueno=user, pizzeria_id=pizzeria_id).exists():
         raise PermissionDenied("No tienes permiso para acceder a esta pizzería.")
 
-# ————————————————————————————————————————————————————————————————
-# 1) CRUD de Pizzerías
-# ————————————————————————————————————————————————————————————————
+# ------------------------------------------
+# 0) Usuario autenticado
+# ------------------------------------------
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def current_user(request):
+    u = request.user
+    return Response({
+        "id": u.id,
+        "username": u.username,
+        "email": u.email
+    })
 
+# 1) CRUD Pizzerías
 class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PizzeriaSerializer
@@ -74,11 +46,7 @@ class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         pizzeria = serializer.save()
-        DuenoPizzeria.objects.create(
-            dueno=self.request.user,
-            pizzeria=pizzeria
-        )
-
+        DuenoPizzeria.objects.create(dueno=self.request.user, pizzeria=pizzeria)
 
 class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
@@ -86,14 +54,11 @@ class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
     lookup_url_kwarg = "pizzeria_id"
 
     def get_queryset(self):
-        return Pizzeria.objects.filter(
-            dueno_asignaciones__dueno=self.request.user
-        )
+        return Pizzeria.objects.filter(dueno_asignaciones__dueno=self.request.user)
 
-# ————————————————————————————————————————————————————————————————
-# 2) CRUD de Ventas
-# ————————————————————————————————————————————————————————————————
-
+# ------------------------------------------
+# 2) CRUD Ventas
+# ------------------------------------------
 class VentaListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = VentaSerializer
@@ -191,10 +156,104 @@ class ProductoRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDest
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def current_user(request):
-    u = request.user
+def resumen_ventas(request):
+    user = request.user
+    rango = request.query_params.get("rango", "total")
+    inicio_str = request.query_params.get("inicio")
+    fin_str = request.query_params.get("fin")
+
+    hoy = now().date()
+    inicio = None
+    fin = hoy + timedelta(days=1)
+
+    if rango == "hoy":
+        inicio = hoy
+    elif rango == "ayer":
+        inicio = hoy - timedelta(days=1)
+        fin = hoy
+    elif rango == "semana":
+        inicio = hoy - timedelta(days=7)
+    elif rango == "personalizado" and inicio_str and fin_str:
+        try:
+            inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date()
+            fin = datetime.strptime(fin_str, "%Y-%m-%d").date() + timedelta(days=1)
+        except ValueError:
+            return Response({"error": "Fechas inválidas."}, status=400)
+
+    ventas = Venta.objects.filter(pizzeria__dueno_asignaciones__dueno=user)
+    if inicio:
+        ventas = ventas.filter(fecha__date__gte=inicio, fecha__date__lt=fin)
+
+    total = ventas.aggregate(total=Sum("total"))["total"] or 0
+
     return Response({
-        "id": u.id,
-        "username": u.username,
-        "email": u.email
+        "rango": rango,
+        "total": float(total),
+        "desde": str(inicio) if inicio else "todo",
+        "hasta": str(fin) if inicio else "todo"
     })
+
+# ------------------------------------------
+# 5) Registro y consulta de etapas de venta
+# ------------------------------------------
+class VentaEtapaCreateAPIView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = VentaEtapaSerializer
+
+    def perform_create(self, serializer):
+        venta = serializer.validated_data["venta"]
+        etapa = serializer.validated_data["etapa"]
+
+        if venta.dueno != self.request.user:
+            raise PermissionDenied("No puedes registrar eventos de una venta que no te pertenece.")
+
+        if VentaEtapa.objects.filter(venta=venta, etapa=etapa).exists():
+            raise ValidationError(f"Ya se registró la etapa '{etapa}' para esta venta.")
+
+        serializer.save()
+
+
+class VentaEtapaListAPIView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = VentaEtapaSerializer
+
+    def get_queryset(self):
+        venta_id = self.kwargs["venta_id"]
+        return VentaEtapa.objects.filter(venta_id=venta_id).order_by("timestamp")
+
+
+class VentaEtapaDuracionesAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, venta_id):
+        etapas = VentaEtapa.objects.filter(venta_id=venta_id).order_by("timestamp")
+        tiempos = []
+        prev = None
+        for etapa in etapas:
+            if prev:
+                diferencia = etapa.timestamp - prev.timestamp
+                tiempos.append({
+                    "de": prev.get_etapa_display(),
+                    "a": etapa.get_etapa_display(),
+                    "segundos": diferencia.total_seconds(),
+                    "minutos": round(diferencia.total_seconds() / 60, 2),
+                    "desde": prev.timestamp,
+                    "hasta": etapa.timestamp,
+                })
+            prev = etapa
+        return Response(tiempos)
+
+
+class VentaEtapaActualAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, venta_id):
+        etapa = VentaEtapa.objects.filter(venta_id=venta_id).order_by("-timestamp").first()
+        if not etapa:
+            return Response({"estado": "sin_etapas"})
+        return Response({
+            "venta": venta_id,
+            "estado_actual": etapa.etapa,
+            "descripcion": etapa.get_etapa_display(),
+            "timestamp": etapa.timestamp
+        })

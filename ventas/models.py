@@ -3,6 +3,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.utils.timezone import now
 
 class Pizzeria(models.Model):
     nombre      = models.CharField(max_length=100)
@@ -157,3 +158,31 @@ class VentaProducto(models.Model):
 
     def __str__(self):
         return f"{self.cantidad}× {self.producto.nombre} en Venta #{self.venta.id}"
+
+class VentaEtapa(models.Model):
+    ETAPAS = [
+        ("toma_pedido_inicio", "Inicio toma de pedido"),
+        ("toma_pedido_fin", "Fin toma de pedido"),
+        ("preparacion_inicio", "Inicio preparación"),
+        ("preparacion_fin", "Fin preparación"),
+        ("envio_inicio", "Inicio envío"),
+        ("envio_fin", "Fin envío"),
+        ("regreso_repartidor", "Regreso repartidor"),
+        ("pago", "Pago realizado"),
+    ]
+
+    venta = models.ForeignKey(
+        "Venta",
+        on_delete=models.CASCADE,
+        related_name="etapas"
+    )
+    etapa = models.CharField(max_length=30, choices=ETAPAS)
+    timestamp = models.DateTimeField(default=now)
+
+    class Meta:
+        db_table = "venta_etapa"
+        unique_together = ("venta", "etapa")
+        ordering = ["timestamp"]
+
+    def __str__(self):
+        return f"{self.venta.id} - {self.etapa} @ {self.timestamp}"
