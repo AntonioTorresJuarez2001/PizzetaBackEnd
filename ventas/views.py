@@ -16,14 +16,18 @@ from .serializers import (
     VentaEtapaSerializer
 )
 
+
+# ——————————————————————————————————————————
 # Utilidad para validar dueño de pizzería
+# ——————————————————————————————————————————
 def check_dueno(user, pizzeria_id):
     if not DuenoPizzeria.objects.filter(dueno=user, pizzeria_id=pizzeria_id).exists():
         raise PermissionDenied("No tienes permiso para acceder a esta pizzería.")
 
-# ------------------------------------------
+
+# ——————————————————————————————————————————
 # 0) Usuario autenticado
-# ------------------------------------------
+# ——————————————————————————————————————————
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def current_user(request):
@@ -72,6 +76,21 @@ class VentaListCreateAPIView(generics.ListCreateAPIView):
         pizzeria_id = self.kwargs["pizzeria_id"]
         check_dueno(self.request.user, pizzeria_id)
         serializer.save(pizzeria_id=pizzeria_id, dueno=self.request.user)
+    
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "permitir_vacia": True}
+    
+    def perform_create(self, serializer):
+        pizzeria_id = self.kwargs["pizzeria_id"]
+        check_dueno(self.request.user, pizzeria_id)
+        venta = serializer.save(pizzeria_id=pizzeria_id, dueno=self.request.user)
+
+        # Registrar automáticamente el inicio del pedido
+        VentaEtapa.objects.create(
+            venta=venta,
+            etapa="toma_pedido_inicio",
+            timestamp=now()
+        )
 
 
 class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -150,10 +169,10 @@ class ProductoRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDest
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-# ————————————————————————————————————————————————————————————————
-# 4) Endpoint para obtener el usuario autenticado
-# ————————————————————————————————————————————————————————————————
 
+# ——————————————————————————————————————————
+# 4) Resumen de Ventas
+# ——————————————————————————————————————————
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def resumen_ventas(request):
@@ -193,9 +212,10 @@ def resumen_ventas(request):
         "hasta": str(fin) if inicio else "todo"
     })
 
-# ------------------------------------------
-# 5) Registro y consulta de etapas de venta
-# ------------------------------------------
+
+# ——————————————————————————————————————————
+# 5) Etapas de venta (registro, tiempos, estado actual)
+# ——————————————————————————————————————————
 class VentaEtapaCreateAPIView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = VentaEtapaSerializer
@@ -210,7 +230,12 @@ class VentaEtapaCreateAPIView(generics.CreateAPIView):
         if VentaEtapa.objects.filter(venta=venta, etapa=etapa).exists():
             raise ValidationError(f"Ya se registró la etapa '{etapa}' para esta venta.")
 
-        serializer.save()
+        # Validación por canal
+        etapas_domicilio = {"envio_inicio", "regreso_repartidor"}
+        if etapa in etapas_domicilio and venta.canal != "DOMICILIO":
+            raise ValidationError(f"La etapa '{etapa}' solo aplica a ventas a domicilio.")
+
+        serializer.save(timestamp=serializer.validated_data.get("timestamp", now()))
 
 
 class VentaEtapaListAPIView(generics.ListAPIView):
@@ -241,7 +266,14 @@ class VentaEtapaDuracionesAPIView(APIView):
                     "hasta": etapa.timestamp,
                 })
             prev = etapa
-        return Response(tiempos)
+
+        duracion_total = (etapas.last().timestamp - etapas.first().timestamp).total_seconds() if etapas.count() >= 2 else 0
+
+        return Response({
+            "duraciones": tiempos,
+            "total_segundos": duracion_total,
+            "total_minutos": round(duracion_total / 60, 2)
+        })
 
 
 class VentaEtapaActualAPIView(APIView):

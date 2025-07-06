@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa
+from rest_framework.exceptions import ValidationError
 
 # ————————————————————————————————————————————
 # Serializador de Pizzería
@@ -64,7 +65,7 @@ class VentaProductoSerializer(serializers.ModelSerializer):
 class VentaSerializer(serializers.ModelSerializer):
     canal = serializers.CharField()
     dueno = serializers.HiddenField(default=serializers.CurrentUserDefault())
-    items = VentaProductoSerializer(many=True)
+    items = VentaProductoSerializer(many=True, required=False)
 
     class Meta:
         model = Venta
@@ -82,8 +83,10 @@ class VentaSerializer(serializers.ModelSerializer):
     def validate_items(self, items):
         """
         Validar que cada item tenga cantidad > 0 y que el producto esté activo.
+        Si permitir_vacia está en el contexto, se omite esta validación.
         """
-        if not items:
+        permitir_vacia = self.context.get("permitir_vacia", False)
+        if not items and not permitir_vacia:
             raise serializers.ValidationError("La venta debe contener al menos un producto.")
 
         for item in items:
@@ -121,6 +124,14 @@ class VentaSerializer(serializers.ModelSerializer):
         return venta
 
     def update(self, instance, validated_data):
+        # Validar que no haya etapas críticas ya registradas
+        etapas_bloqueo = {"preparacion_inicio", "envio_inicio", "pago"}
+        etapas_existentes = set(instance.etapas.values_list("etapa", flat=True))
+
+        if etapas_bloqueo & etapas_existentes:
+            raise ValidationError("Esta venta ya no puede ser editada porque ha avanzado en el proceso.")
+
+        # Continúa la lógica normal si se permite editar
         items_data = validated_data.pop('items', None)
 
         if items_data is not None:
@@ -151,5 +162,22 @@ class VentaEtapaSerializer(serializers.ModelSerializer):
         model = VentaEtapa
         fields = ['id', 'venta', 'etapa', 'etapa_display', 'timestamp']
         read_only_fields = ['id']
+
+    def validate(self, data):
+        venta = data['venta']
+        nueva_etapa = data['etapa']
+        etapas_actuales = venta.etapas.values_list('etapa', flat=True)
+
+        if nueva_etapa == 'pago' and 'cancelada' in etapas_actuales:
+            raise serializers.ValidationError("No se puede marcar como 'pagada' una venta ya cancelada.")
+        
+        if nueva_etapa == 'cancelada' and 'pago' in etapas_actuales:
+            raise serializers.ValidationError("No se puede cancelar una venta ya marcada como 'pagada'.")
+        
+        if nueva_etapa in etapas_actuales:
+            raise serializers.ValidationError(f"La etapa '{nueva_etapa}' ya ha sido registrada.")
+
+        return data
+
 
 

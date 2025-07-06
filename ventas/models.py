@@ -113,6 +113,7 @@ class Venta(models.Model):
         db_column="dueno_id",
         related_name="ventas_registradas"
     )
+    #fecha       = models.DateTimeField()
     fecha        = models.DateTimeField(auto_now_add=True)
     total        = models.DecimalField(max_digits=10, decimal_places=2)
     canal        = models.CharField(
@@ -169,6 +170,7 @@ class VentaEtapa(models.Model):
         ("envio_fin", "Fin envío"),
         ("regreso_repartidor", "Regreso repartidor"),
         ("pago", "Pago realizado"),
+        ("cancelada", "Venta cancelada"),
     ]
 
     venta = models.ForeignKey(
