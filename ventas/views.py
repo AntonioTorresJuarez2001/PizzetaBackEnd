@@ -5,7 +5,8 @@ from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.db.models import Sum, ProtectedError
+from django.db.models import Sum, ProtectedError, Count
+from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from django.utils.timezone import now, timedelta
 from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa
@@ -27,7 +28,7 @@ def check_dueno(user, pizzeria_id):
 
 # ——————————————————————————————————————————
 # 0) Usuario autenticado
-# ——————————————————————————————————————————
+# ------------------------------------------
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def current_user(request):
@@ -191,7 +192,10 @@ def resumen_ventas(request):
         inicio = hoy - timedelta(days=1)
         fin = hoy
     elif rango == "semana":
-        inicio = hoy - timedelta(days=7)
+        # Obtener el lunes de la semana actual (inicio de semana)
+        dias_desde_lunes = hoy.weekday()  # 0=lunes, 6=domingo
+        inicio = hoy - timedelta(days=dias_desde_lunes)
+        fin = inicio + timedelta(days=7)  # Hasta el domingo (inclusive)
     elif rango == "personalizado" and inicio_str and fin_str:
         try:
             inicio = datetime.strptime(inicio_str, "%Y-%m-%d").date()
@@ -289,3 +293,254 @@ class VentaEtapaActualAPIView(APIView):
             "descripcion": etapa.get_etapa_display(),
             "timestamp": etapa.timestamp
         })
+        
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def ventas_por_dia(request):
+    user = request.user
+    rango = request.query_params.get("rango", "hoy")
+    tipo = request.query_params.get("tipo", "total")  # 'total' o 'cantidad'
+    hoy = now().date()
+    inicio = hoy
+    fin = hoy + timedelta(days=1)
+
+    if rango == "hoy":
+        inicio = hoy
+        fin = hoy + timedelta(days=1)
+    elif rango == "ayer":
+        ayer = hoy - timedelta(days=1)
+        inicio = ayer
+        fin = hoy  # hasta hoy (sin incluir)
+    elif rango == "semana":
+        # Obtener el lunes de la semana actual (inicio de semana)
+        dias_desde_lunes = hoy.weekday()  # 0=lunes, 6=domingo
+        inicio = hoy - timedelta(days=dias_desde_lunes)
+        fin = inicio + timedelta(days=7)  # Hasta el domingo (inclusive)
+    elif rango == "mes":
+        # Para mostrar todos los meses del año actual
+        inicio = hoy.replace(month=1, day=1)
+        fin = hoy.replace(month=12, day=31) + timedelta(days=1)
+    elif rango == "anio":
+        # Para mostrar los últimos 5 años
+        anio_actual = hoy.year
+        inicio = hoy.replace(year=anio_actual - 4, month=1, day=1)  # 5 años atrás
+        fin = hoy.replace(year=anio_actual, month=12, day=31) + timedelta(days=1)
+    # Puedes agregar más rangos si lo necesitas
+
+    if tipo == "cantidad":
+        # Contar ventas por día
+        ventas = (
+            Venta.objects
+            .filter(pizzeria__dueno_asignaciones__dueno=user, fecha__date__gte=inicio, fecha__date__lt=fin)
+            .annotate(dia=TruncDate('fecha'))
+            .values('dia')
+            .annotate(total=Count('id'))  # Contar ventas en lugar de sumar totales
+            .order_by('dia')
+        )
+    else:
+        # Sumar totales por día (comportamiento original)
+        ventas = (
+            Venta.objects
+            .filter(pizzeria__dueno_asignaciones__dueno=user, fecha__date__gte=inicio, fecha__date__lt=fin)
+            .annotate(dia=TruncDate('fecha'))
+            .values('dia')
+            .annotate(total=Sum('total'))
+            .order_by('dia')
+        )
+
+    if rango == "semana":
+        # Para semana, mostrar cada día con su fecha como label y nombre del día
+        # Crear un diccionario con las ventas por fecha
+        if tipo == "cantidad":
+            ventas_por_fecha = {v["dia"]: int(v["total"]) for v in ventas}
+        else:
+            ventas_por_fecha = {v["dia"]: float(v["total"]) for v in ventas}
+        
+        # Nombres de los días de la semana en español
+        dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        
+        data = []
+        # Generar datos para cada día de la semana (lunes a domingo)
+        for i in range(7):
+            fecha_dia = inicio + timedelta(days=i)
+            if tipo == "cantidad":
+                total_dia = ventas_por_fecha.get(fecha_dia, 0)
+            else:
+                total_dia = ventas_por_fecha.get(fecha_dia, 0.0)
+            
+            data.append({
+                "label": dias_semana[i],  # Nombre del día para mostrar
+                "fecha": fecha_dia.strftime("%d-%m-%Y"),  # Fecha real
+                "total": total_dia,
+                "dia_semana": i + 1  # 1=Lunes, 7=Domingo
+            })
+        
+        # Debug: imprimir en consola lo que estamos devolviendo
+        print(f"=== DEBUG VENTAS SEMANA ===")
+        print(f"Rango recibido: {rango}")
+        print(f"Tipo: {tipo}")
+        print(f"Inicio: {inicio}, Fin: {fin}")
+        print(f"Ventas DB: {list(ventas)}")
+        print(f"Data final que se envía al frontend: {data}")
+        print("=== FIN DEBUG ===")
+    elif rango == "mes":
+        # Para mes, agrupar por mes y mostrar los 12 meses del año
+        
+        # Reagrupar ventas por mes
+        if tipo == "cantidad":
+            ventas_por_mes = (
+                Venta.objects
+                .filter(pizzeria__dueno_asignaciones__dueno=user, fecha__date__gte=inicio, fecha__date__lt=fin)
+                .annotate(mes=TruncMonth('fecha'))
+                .values('mes')
+                .annotate(total=Count('id'))  # Contar ventas
+                .order_by('mes')
+            )
+        else:
+            ventas_por_mes = (
+                Venta.objects
+                .filter(pizzeria__dueno_asignaciones__dueno=user, fecha__date__gte=inicio, fecha__date__lt=fin)
+                .annotate(mes=TruncMonth('fecha'))
+                .values('mes')
+                .annotate(total=Sum('total'))  # Sumar totales
+                .order_by('mes')
+            )
+        
+        # Crear diccionario con ventas por mes
+        if tipo == "cantidad":
+            ventas_mes_dict = {v["mes"].month: int(v["total"]) for v in ventas_por_mes if v["mes"]}
+        else:
+            ventas_mes_dict = {v["mes"].month: float(v["total"]) for v in ventas_por_mes if v["mes"]}
+        
+        # Nombres de los meses en español
+        meses_nombres = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ]
+        
+        data = []
+        # Generar datos para cada mes del año (1-12)
+        for i in range(1, 13):
+            if tipo == "cantidad":
+                total_mes = ventas_mes_dict.get(i, 0)
+            else:
+                total_mes = ventas_mes_dict.get(i, 0.0)
+            
+            data.append({
+                "label": meses_nombres[i-1],  # Nombre del mes para mostrar
+                "mes": i,  # Número del mes (1-12)
+                "total": total_mes,
+                "anio": hoy.year  # Año actual
+            })
+        
+        # Debug: imprimir en consola lo que estamos devolviendo
+        print(f"=== DEBUG VENTAS MES ===")
+        print(f"Rango recibido: {rango}")
+        print(f"Inicio: {inicio}, Fin: {fin}")
+        print(f"Ventas DB por mes: {list(ventas_por_mes)}")
+        print(f"Data final que se envía al frontend: {data}")
+        print("=== FIN DEBUG ===")
+    elif rango == "anio":
+        # Para año, agrupar por año y mostrar los últimos 5 años
+        
+        # Reagrupar ventas por año
+        if tipo == "cantidad":
+            ventas_por_anio = (
+                Venta.objects
+                .filter(pizzeria__dueno_asignaciones__dueno=user, fecha__date__gte=inicio, fecha__date__lt=fin)
+                .annotate(anio=TruncYear('fecha'))
+                .values('anio')
+                .annotate(total=Count('id'))  # Contar ventas
+                .order_by('anio')
+            )
+        else:
+            ventas_por_anio = (
+                Venta.objects
+                .filter(pizzeria__dueno_asignaciones__dueno=user, fecha__date__gte=inicio, fecha__date__lt=fin)
+                .annotate(anio=TruncYear('fecha'))
+                .values('anio')
+                .annotate(total=Sum('total'))  # Sumar totales
+                .order_by('anio')
+            )
+        
+        # Crear diccionario con ventas por año
+        if tipo == "cantidad":
+            ventas_anio_dict = {v["anio"].year: int(v["total"]) for v in ventas_por_anio if v["anio"]}
+        else:
+            ventas_anio_dict = {v["anio"].year: float(v["total"]) for v in ventas_por_anio if v["anio"]}
+        
+        data = []
+        anio_actual = hoy.year
+        # Generar datos para los últimos 5 años
+        for i in range(5):
+            anio = anio_actual - (4 - i)  # Desde hace 5 años hasta el año actual
+            if tipo == "cantidad":
+                total_anio = ventas_anio_dict.get(anio, 0)
+            else:
+                total_anio = ventas_anio_dict.get(anio, 0.0)
+            
+            data.append({
+                "label": str(anio),  # Año como string para mostrar
+                "anio": anio,  # Año como número
+                "total": total_anio
+            })
+        
+        # Debug: imprimir en consola lo que estamos devolviendo
+        print(f"=== DEBUG VENTAS AÑO ===")
+        print(f"Rango recibido: {rango}")
+        print(f"Inicio: {inicio}, Fin: {fin}")
+        print(f"Años a mostrar: {anio_actual-4} a {anio_actual}")
+        print(f"Ventas DB por año: {list(ventas_por_anio)}")
+        print(f"Data final que se envía al frontend: {data}")
+        print("=== FIN DEBUG ===")
+    else:
+        print(f"=== DEBUG OTROS RANGOS ===")
+        print(f"Rango: {rango}")
+        print(f"Tipo: {tipo}")
+        if tipo == "cantidad":
+            data = [
+                {"label": v["dia"].strftime("%d-%m-%Y"), "total": int(v["total"])}
+                for v in ventas
+            ]
+        else:
+            data = [
+                {"label": v["dia"].strftime("%d-%m-%Y"), "total": float(v["total"])}
+                for v in ventas
+            ]
+        print(f"Data final: {data}")
+        print("=== FIN DEBUG ===")
+    
+    return Response(data)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def ventas_ayer(request):
+    """
+    Endpoint para obtener todas las ventas de ayer con detalles completos
+    """
+    user = request.user
+    hoy = now().date()
+    ayer = hoy - timedelta(days=1)
+    inicio_ayer = ayer
+    fin_ayer = hoy  # Hasta hoy (sin incluir)
+    
+    # Obtener todas las ventas de ayer
+    ventas = Venta.objects.filter(
+        pizzeria__dueno_asignaciones__dueno=user,
+        fecha__date__gte=inicio_ayer,
+        fecha__date__lt=fin_ayer
+    ).order_by('-fecha')
+    
+    # Serializar las ventas
+    serializer = VentaSerializer(ventas, many=True)
+    
+    # Calcular totales
+    total_ventas = ventas.aggregate(total=Sum('total'))['total'] or 0
+    cantidad_ventas = ventas.count()
+    
+    return Response({
+        "fecha": str(ayer),
+        "cantidad_ventas": cantidad_ventas,
+        "total_ventas": float(total_ventas),
+        "ventas": serializer.data
+    })

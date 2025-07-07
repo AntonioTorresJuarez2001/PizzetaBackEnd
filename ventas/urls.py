@@ -11,12 +11,16 @@ from .views import (
     VentaEtapaCreateAPIView,
     VentaEtapaListAPIView,
     VentaEtapaDuracionesAPIView,
-    VentaEtapaActualAPIView,  
+    VentaEtapaActualAPIView,
+    ventas_por_dia,
+    ventas_ayer
 )
 
 urlpatterns = [
     # Usuarios y resumen
     path("ventas/resumen/", resumen_ventas, name="resumen-ventas"),
+    path("ventas-por-dia/", ventas_por_dia, name="ventas-por-dia"),  # Nueva ruta
+    path("ventas/ayer/", ventas_ayer, name="ventas-ayer"),  # Nueva ruta para ayer
     path("user/", current_user, name="current-user"),
 
     # Pizzerías

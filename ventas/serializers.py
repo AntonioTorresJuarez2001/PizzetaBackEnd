@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa
 from rest_framework.exceptions import ValidationError
+from django.utils import timezone
 
 # ————————————————————————————————————————————
 # Serializador de Pizzería
@@ -105,8 +106,10 @@ class VentaSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
-
-        # Recalcular total automáticamente ignorando lo enviado por el cliente
+        # Si no viene 'fecha', pon la actual
+        if 'fecha' not in validated_data or validated_data['fecha'] is None:
+            validated_data['fecha'] = timezone.now()
+        # Calcular el total antes de crear la venta
         total = sum(
             item['producto'].precio * item['cantidad']
             for item in items_data
