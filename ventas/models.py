@@ -99,6 +99,8 @@ class Venta(models.Model):
         ('LLEVAR',      'Llevar'),
         ('MOSTRADOR',   'Mostrador'),
         ('PLATAFORMAS', 'Plataformas'),
+        ('DELIVERY',    'Delivery')
+
     ]
 
     pizzeria     = models.ForeignKey(

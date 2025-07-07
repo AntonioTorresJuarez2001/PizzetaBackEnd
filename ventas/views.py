@@ -231,9 +231,9 @@ class VentaEtapaCreateAPIView(generics.CreateAPIView):
             raise ValidationError(f"Ya se registró la etapa '{etapa}' para esta venta.")
 
         # Validación por canal
-        etapas_domicilio = {"envio_inicio", "regreso_repartidor"}
-        if etapa in etapas_domicilio and venta.canal != "DOMICILIO":
-            raise ValidationError(f"La etapa '{etapa}' solo aplica a ventas a domicilio.")
+        etapas_envio = {"envio_inicio", "regreso_repartidor"}
+        if etapa in etapas_envio and venta.canal not in {"DOMICILIO", "LLEVAR", "DELIVERY"}:
+            raise ValidationError(f"La etapa '{etapa}' solo aplica a ventas a domicilio o para llevar.")
 
         serializer.save(timestamp=serializer.validated_data.get("timestamp", now()))
 
