@@ -7,6 +7,8 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from rest_framework import permissions
+from ventas.views import current_user
+
 
 # drf-yasg imports
 from drf_yasg.views import get_schema_view
@@ -35,6 +37,9 @@ urlpatterns = [
 
     # Tu app de ventas
     path("api/", include("ventas.urls")),
+    
+    #usuarios
+    path("user/", current_user), 
 
     # Documentación drf-yasg
     re_path(r'^swagger(?P<format>\.json|\.yaml)$',

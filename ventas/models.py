@@ -4,6 +4,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.utils.timezone import now
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class Pizzeria(models.Model):
     nombre      = models.CharField(max_length=100)
@@ -190,3 +192,19 @@ class VentaEtapa(models.Model):
 
     def __str__(self):
         return f"{self.venta.id} - {self.etapa} @ {self.timestamp}"
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="perfil")
+    rol = models.CharField(max_length=20, choices=[
+        ("admin", "Administrador"),
+        ("normal", "Normal"),
+        ("solo_lectura", "Solo lectura"),
+    ], default="normal")
+
+    def __str__(self):
+        return f"{self.user.username} - {self.rol}"
+    
+@receiver(post_save, sender=User)
+def crear_perfil_usuario(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)

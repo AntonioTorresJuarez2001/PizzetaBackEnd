@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.db.models import Sum, ProtectedError, Count
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
+from .permissions import SoloLecturaPermission
 from django.utils.timezone import now, timedelta
 from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa
 from .serializers import (
@@ -33,15 +34,18 @@ def check_dueno(user, pizzeria_id):
 @permission_classes([IsAuthenticated])
 def current_user(request):
     u = request.user
+    perfil = getattr(u, "perfil", None)
+
     return Response({
         "id": u.id,
         "username": u.username,
-        "email": u.email
+        "email": u.email,
+        "rol": perfil.rol if perfil else "normal"
     })
 
 # 1) CRUD Pizzerías
 class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = PizzeriaSerializer
 
     def get_queryset(self):
@@ -54,7 +58,7 @@ class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
         DuenoPizzeria.objects.create(dueno=self.request.user, pizzeria=pizzeria)
 
 class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = PizzeriaSerializer
     lookup_url_kwarg = "pizzeria_id"
 
@@ -65,7 +69,7 @@ class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
 # 2) CRUD Ventas
 # ------------------------------------------
 class VentaListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaSerializer
 
     def get_queryset(self):
@@ -95,7 +99,7 @@ class VentaListCreateAPIView(generics.ListCreateAPIView):
 
 
 class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaSerializer
     lookup_url_kwarg = "venta_id"
 
@@ -106,7 +110,7 @@ class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class VentaRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaSerializer
     lookup_url_kwarg = "venta_id"
 
@@ -135,7 +139,7 @@ class VentaRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroy
 # ————————————————————————————————————————————————————————————————
 
 class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = ProductoSerializer
 
     def get_queryset(self):
@@ -150,7 +154,7 @@ class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
 
 
 class ProductoRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = ProductoSerializer
     lookup_url_kwarg = "pk"
 
@@ -221,7 +225,7 @@ def resumen_ventas(request):
 # 5) Etapas de venta (registro, tiempos, estado actual)
 # ——————————————————————————————————————————
 class VentaEtapaCreateAPIView(generics.CreateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaEtapaSerializer
 
     def perform_create(self, serializer):
