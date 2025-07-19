@@ -194,12 +194,18 @@ class VentaEtapa(models.Model):
         return f"{self.venta.id} - {self.etapa} @ {self.timestamp}"
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="perfil")
-    rol = models.CharField(max_length=20, choices=[
+    ROLES = [
         ("admin", "Administrador"),
-        ("normal", "Normal"),
+        ("gerente", "Gerente"),
+        ("subgerente", "Subgerente"),
+        ("empleado", "Empleado"),
+        ("dueno", "Dueño"),
+        ("cajero", "Cajero"),
         ("solo_lectura", "Solo lectura"),
-    ], default="normal")
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="perfil")
+    rol = models.CharField(max_length=30, choices=ROLES, default="empleado")  # o el que prefieras por defecto
 
     def __str__(self):
         return f"{self.user.username} - {self.rol}"
