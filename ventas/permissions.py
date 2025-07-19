@@ -10,17 +10,15 @@ class EmpleadoSoloLecturaPermission(permissions.BasePermission):
     Para otros roles, se permite acceso completo.
     """
 
-    def has_permission(self, request, view):
-        # Intentar obtener el ID de la pizzería desde la URL
-        pizzeria_id = view.kwargs.get("pizzeria_id")
+def has_permission(self, request, view):
+    # Si es un método de lectura, lo permitimos siempre que esté autenticado
+    if request.method in permissions.SAFE_METHODS:
+        return request.user.is_authenticated
 
-        # Si no hay pizzería en la URL, denegamos por seguridad
-        if not pizzeria_id:
-            return False
+    # Para POST, PUT, DELETE, intentamos verificar rol con pizzeria_id si está disponible
+    pizzeria_id = view.kwargs.get("pizzeria_id")
+    if not pizzeria_id:
+        return False  # No se puede verificar permiso de escritura
 
-        rol = get_rol_en_pizzeria(request.user, pizzeria_id)
-
-        if rol == "empleado":
-            return request.method in permissions.SAFE_METHODS  # solo GET, HEAD, OPTIONS
-
-        return True  # gerente, dueño, etc. tienen acceso total
+    rol = get_rol_en_pizzeria(request.user, pizzeria_id)
+    return rol != "empleado"  # Solo empleados tienen acceso limitado

@@ -680,8 +680,13 @@ class UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDest
     def perform_update(self, serializer):
         rol_instance = self.get_object()
         check_dueno(self.request.user, rol_instance.pizzeria_id)
-        serializer.save()
+        instance = serializer.save()
 
-    def perform_destroy(self, instance):
-        check_dueno(self.request.user, instance.pizzeria_id)
-        instance.delete()
+        # Aquí actualizamos el perfil global con el nuevo rol
+        from ventas.models import UserProfile
+        try:
+            perfil = UserProfile.objects.get(user=instance.user)
+            perfil.rol = instance.rol
+            perfil.save()
+        except UserProfile.DoesNotExist:
+            pass

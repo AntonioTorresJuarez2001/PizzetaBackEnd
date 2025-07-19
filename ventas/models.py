@@ -202,6 +202,7 @@ class UserProfile(models.Model):
         ("dueno", "Dueño"),
         ("cajero", "Cajero"),
         ("solo_lectura", "Solo lectura"),
+        ("sin_rol", "Sin Rol")
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="perfil")
