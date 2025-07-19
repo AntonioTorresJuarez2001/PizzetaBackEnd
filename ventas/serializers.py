@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa
+from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa, UsuarioPizzeriaRol
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 # ————————————————————————————————————————————
 # Serializador de Pizzería
@@ -181,6 +182,44 @@ class VentaEtapaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"La etapa '{nueva_etapa}' ya ha sido registrada.")
 
         return data
+
+# Dueños
+class UsuarioPizzeriaRolSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(write_only=True, required=False)
+    pizzeria_id = serializers.IntegerField(write_only=True, required=False)
+
+    user = serializers.StringRelatedField(read_only=True)
+    pizzeria = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = UsuarioPizzeriaRol
+        fields = ["id", "username", "pizzeria_id", "user", "pizzeria", "rol", "creado"]
+
+    def validate(self, data):
+        if self.instance:  # En update no hace falta username ni pizzeria_id
+            return data
+
+        try:
+            user = User.objects.get(username=data["username"])
+        except User.DoesNotExist:
+            raise serializers.ValidationError("El usuario no existe.")
+
+        try:
+            pizzeria = Pizzeria.objects.get(id=data["pizzeria_id"])
+        except Pizzeria.DoesNotExist:
+            raise serializers.ValidationError("La pizzería no existe.")
+
+        if UsuarioPizzeriaRol.objects.filter(user=user, pizzeria=pizzeria).exists():
+            raise serializers.ValidationError("Ese usuario ya tiene un rol en esta pizzería.")
+
+        data["user"] = user
+        data["pizzeria"] = pizzeria
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop("username")
+        validated_data.pop("pizzeria_id")
+        return UsuarioPizzeriaRol.objects.create(**validated_data)
 
 
 

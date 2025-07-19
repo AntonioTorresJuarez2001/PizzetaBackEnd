@@ -210,7 +210,34 @@ class UserProfile(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.rol}"
     
-@receiver(post_save, sender=User)
-def crear_perfil_usuario(sender, instance, created, **kwargs):
-    if created:
-        UserProfile.objects.create(user=instance)
+        
+class UsuarioPizzeriaRol(models.Model):
+    ROLES = [
+        ("dueno", "Dueño"),
+        ("gerente", "Gerente"),
+        ("subgerente", "Subgerente"),
+        ("cajero", "Cajero"),
+        ("empleado", "Empleado"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="roles_por_pizzeria"
+    )
+    pizzeria = models.ForeignKey(
+        Pizzeria,
+        on_delete=models.CASCADE,
+        related_name="usuarios_con_rol"
+    )
+    rol = models.CharField(max_length=20, choices=ROLES)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "usuario_pizzeria_rol"
+        unique_together = ("user", "pizzeria")  # Un solo rol por pizzería
+        verbose_name = "Rol de usuario en pizzería"
+        verbose_name_plural = "Roles de usuarios en pizzerías"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.pizzeria.nombre} → {self.rol}"

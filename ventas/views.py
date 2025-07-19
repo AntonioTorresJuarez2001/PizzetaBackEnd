@@ -1,5 +1,5 @@
 # ventas/views.py
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
@@ -10,14 +10,16 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from .permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
-from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa
+from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa, UsuarioPizzeriaRol
 from .serializers import (
     PizzeriaSerializer,
     VentaSerializer,
     ProductoSerializer,
-    VentaEtapaSerializer
+    VentaEtapaSerializer,
+    UsuarioPizzeriaRolSerializer
 )
 from drf_yasg.utils import swagger_auto_schema
+from ventas.utils.roles import get_rol_en_pizzeria
 
 
 # ——————————————————————————————————————————
@@ -646,3 +648,40 @@ def ventas_ayer(request):
         "total_ventas": float(total_ventas),
         "ventas": serializer.data
     })
+
+# ventas/views.py
+
+class UsuarioPizzeriaRolListCreateAPIView(generics.ListCreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UsuarioPizzeriaRolSerializer
+
+    def get_queryset(self):
+        return UsuarioPizzeriaRol.objects.filter(
+            pizzeria__dueno_asignaciones__dueno=self.request.user
+        ).select_related("user", "pizzeria")
+
+    def perform_create(self, serializer):
+        # Solo dueños pueden crear
+        pizzeria_id = self.request.data.get("pizzeria_id")
+        if not pizzeria_id:
+            raise serializers.ValidationError("Se requiere el campo pizzeria_id.")
+
+        check_dueno(self.request.user, pizzeria_id)
+        serializer.save()
+
+class UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UsuarioPizzeriaRolSerializer
+    lookup_url_kwarg = "rol_id"
+
+    def get_queryset(self):
+        return UsuarioPizzeriaRol.objects.select_related("user", "pizzeria")
+
+    def perform_update(self, serializer):
+        rol_instance = self.get_object()
+        check_dueno(self.request.user, rol_instance.pizzeria_id)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        check_dueno(self.request.user, instance.pizzeria_id)
+        instance.delete()

@@ -13,7 +13,9 @@ from .views import (
     VentaEtapaDuracionesAPIView,
     VentaEtapaActualAPIView,
     ventas_por_dia,
-    ventas_ayer
+    ventas_ayer,
+    UsuarioPizzeriaRolListCreateAPIView,
+    UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView
 )
 
 urlpatterns = [
@@ -22,6 +24,9 @@ urlpatterns = [
     path("ventas-por-dia/", ventas_por_dia, name="ventas-por-dia"),  # Nueva ruta
     path("ventas/ayer/", ventas_ayer, name="ventas-ayer"),  # Nueva ruta para ayer
     path("user/", current_user, name="current-user"),
+    path("usuarios_pizzeria/", UsuarioPizzeriaRolListCreateAPIView.as_view(), name="lista-crea-roles"),
+    path("usuarios_pizzeria/<int:rol_id>/", UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView.as_view(), name="rol-detalle"),
+
 
     # Pizzerías
     path("pizzerias/", PizzeriaListCreateAPIView.as_view(), name="lista-pizzerias"),
@@ -40,4 +45,6 @@ urlpatterns = [
     path("ventas/<int:venta_id>/etapas/", VentaEtapaListAPIView.as_view(), name="listar-etapas-venta"),
     path("ventas/<int:venta_id>/etapas/tiempos/", VentaEtapaDuracionesAPIView.as_view(), name="tiempos-entre-etapas"),
     path("ventas/<int:venta_id>/estado/", VentaEtapaActualAPIView.as_view(), name="estado-venta"),
+    
+    
 ]
