@@ -20,7 +20,7 @@ schema_view = get_schema_view(
         title="PizzaDashboard API",
         default_version='v1',
         description="Autenticación y CRUD de pizzerías/ventas",
-        contact=openapi.Contact(email="soporte@tudominio.com"),
+        contact=openapi.Contact(email="torres.antonio.f1@gmail.com"),
         license=openapi.License(name="MIT License"),
     ),
     public=True,

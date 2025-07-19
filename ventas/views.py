@@ -17,6 +17,7 @@ from .serializers import (
     ProductoSerializer,
     VentaEtapaSerializer
 )
+from drf_yasg.utils import swagger_auto_schema
 
 
 # ——————————————————————————————————————————
@@ -30,6 +31,11 @@ def check_dueno(user, pizzeria_id):
 # ——————————————————————————————————————————
 # 0) Usuario autenticado
 # ------------------------------------------
+@swagger_auto_schema(
+    method='get', 
+    tags=["Token y Usuarios"], 
+    operation_description="Devuelve los datos del usuario autenticado, incluyendo ID, nombre de usuario, email y rol asignado."
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def current_user(request):
@@ -43,10 +49,18 @@ def current_user(request):
         "rol": perfil.rol if perfil else "normal"
     })
 
-# 1) CRUD Pizzerías
+# 1) CRUD Unidades (Pizzerías)
 class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = PizzeriaSerializer
+
+    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
     def get_queryset(self):
         return Pizzeria.objects.filter(
@@ -62,6 +76,22 @@ class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
     serializer_class = PizzeriaSerializer
     lookup_url_kwarg = "pizzeria_id"
 
+    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
+
     def get_queryset(self):
         return Pizzeria.objects.filter(dueno_asignaciones__dueno=self.request.user)
 
@@ -72,16 +102,19 @@ class VentaListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaSerializer
 
+    @swagger_auto_schema(tags=["Ventas"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Ventas"])
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
     def get_queryset(self):
         pizzeria_id = self.kwargs["pizzeria_id"]
         check_dueno(self.request.user, pizzeria_id)
         return Venta.objects.filter(pizzeria_id=pizzeria_id).order_by("-fecha")
 
-    def perform_create(self, serializer):
-        pizzeria_id = self.kwargs["pizzeria_id"]
-        check_dueno(self.request.user, pizzeria_id)
-        serializer.save(pizzeria_id=pizzeria_id, dueno=self.request.user)
-    
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "permitir_vacia": True}
     
@@ -103,6 +136,18 @@ class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = VentaSerializer
     lookup_url_kwarg = "venta_id"
 
+    @swagger_auto_schema(tags=["Ventas"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Ventas"])
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Ventas"])
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
+
     def get_queryset(self):
         return Venta.objects.filter(
             pizzeria__dueno_asignaciones__dueno=self.request.user
@@ -113,6 +158,22 @@ class VentaRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroy
     permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaSerializer
     lookup_url_kwarg = "venta_id"
+
+    @swagger_auto_schema(tags=["Ventas"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Ventas"])
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    @swagger_auto_schema(tags=["Ventas"])
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Ventas"])
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
 
     def get_queryset(self):
         pizzeria_id = self.kwargs["pizzeria_id"]
@@ -142,6 +203,14 @@ class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = ProductoSerializer
 
+    @swagger_auto_schema(tags=["Productos"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Productos"])
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
     def get_queryset(self):
         pizzeria_id = self.kwargs["pizzeria_id"]
         check_dueno(self.request.user, pizzeria_id)
@@ -157,6 +226,22 @@ class ProductoRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDest
     permission_classes = [IsAuthenticated, SoloLecturaPermission]
     serializer_class = ProductoSerializer
     lookup_url_kwarg = "pk"
+
+    @swagger_auto_schema(tags=["Productos"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Productos"])
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    @swagger_auto_schema(tags=["Productos"])
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=["Productos"])
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
 
     def get_queryset(self):
         pizzeria_id = self.kwargs["pizzeria_id"]
@@ -178,6 +263,7 @@ class ProductoRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDest
 # ——————————————————————————————————————————
 # 4) Resumen de Ventas
 # ——————————————————————————————————————————
+@swagger_auto_schema(method='get', tags=["Ventas Estadistica/Resumen"])
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def resumen_ventas(request):
@@ -228,6 +314,10 @@ class VentaEtapaCreateAPIView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated, SoloLecturaPermission]
     serializer_class = VentaEtapaSerializer
 
+    @swagger_auto_schema(tags=["Etapas de Venta"])
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         venta = serializer.validated_data["venta"]
         etapa = serializer.validated_data["etapa"]
@@ -250,6 +340,10 @@ class VentaEtapaListAPIView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = VentaEtapaSerializer
 
+    @swagger_auto_schema(tags=["Etapas de Venta"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
         venta_id = self.kwargs["venta_id"]
         return VentaEtapa.objects.filter(venta_id=venta_id).order_by("timestamp")
@@ -258,6 +352,7 @@ class VentaEtapaListAPIView(generics.ListAPIView):
 class VentaEtapaDuracionesAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @swagger_auto_schema(tags=["Etapas de Venta"])
     def get(self, request, venta_id):
         etapas = VentaEtapa.objects.filter(venta_id=venta_id).order_by("timestamp")
         tiempos = []
@@ -287,6 +382,7 @@ class VentaEtapaDuracionesAPIView(APIView):
 class VentaEtapaActualAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @swagger_auto_schema(tags=["Etapas de Venta"])
     def get(self, request, venta_id):
         etapa = VentaEtapa.objects.filter(venta_id=venta_id).order_by("-timestamp").first()
         if not etapa:
@@ -298,6 +394,7 @@ class VentaEtapaActualAPIView(APIView):
             "timestamp": etapa.timestamp
         })
         
+@swagger_auto_schema(method='get', tags=["Ventas Estadistica/Resumen"])
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def ventas_por_dia(request):
@@ -516,6 +613,7 @@ def ventas_por_dia(request):
     
     return Response(data)
 
+@swagger_auto_schema(method='get', tags=["Ventas Estadistica/Resumen"])
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def ventas_ayer(request):
