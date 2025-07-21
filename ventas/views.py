@@ -1,5 +1,6 @@
 # ventas/views.py
 from rest_framework import generics, permissions, status, serializers
+from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +11,7 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from .permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
-from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa, UsuarioPizzeriaRol
+from .models import Pizzeria, Venta, DuenoPizzeria, Producto, VentaEtapa, UsuarioPizzeriaRol, User
 from .serializers import (
     PizzeriaSerializer,
     VentaSerializer,
@@ -661,12 +662,12 @@ class UsuarioPizzeriaRolListCreateAPIView(generics.ListCreateAPIView):
         ).select_related("user", "pizzeria")
 
     def perform_create(self, serializer):
-        # Solo dueños pueden crear
-        pizzeria_id = self.request.data.get("pizzeria_id")
-        if not pizzeria_id:
-            raise serializers.ValidationError("Se requiere el campo pizzeria_id.")
+        pizzeria_obj = serializer.validated_data.get("pizzeria")
 
-        check_dueno(self.request.user, pizzeria_id)
+        if not pizzeria_obj:
+            raise serializers.ValidationError("Se requiere una pizzería válida.")
+
+        check_dueno(self.request.user, pizzeria_obj.id)
         serializer.save()
 
 class UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -690,3 +691,98 @@ class UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDest
             perfil.save()
         except UserProfile.DoesNotExist:
             pass
+        
+class CrearEmpleadoAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        data = request.data
+        username = data.get("username")
+        password = data.get("password")
+        email = data.get("email")
+        pizzeria_id = data.get("pizzeria_id")
+        rol_asignar = data.get("rol", "empleado")
+
+        if not all([username, password, pizzeria_id]):
+            return Response(
+                {"error": "username, password y pizzeria_id son obligatorios."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        perfil = getattr(request.user, "perfil", None)
+        if not perfil:
+            return Response({"error": "Perfil no encontrado."}, status=400)
+
+        rol_actual = perfil.rol
+
+        # Validar jerarquía permitida
+        jerarquia = {
+            "admin": ["admin", "dueno", "gerente", "subgerente", "empleado", "cajero"],
+            "dueno": ["gerente", "subgerente", "empleado", "cajero"],
+            "gerente": ["subgerente", "empleado", "cajero",],
+            "subgerente": ["empleado", "cajero"],
+        }
+
+        if rol_actual not in jerarquia:
+            return Response({"error": "No tienes permiso para crear usuarios."}, status=403)
+
+        if rol_asignar not in jerarquia[rol_actual]:
+            return Response({
+                "error": f"No puedes asignar el rol '{rol_asignar}'. Solo puedes asignar: {', '.join(jerarquia[rol_actual])}."
+            }, status=403)
+
+        # Validar control sobre la pizzería según su rol
+        if rol_actual == "admin":
+            pass  # acceso total
+
+        elif rol_actual == "dueno":
+            try:
+                check_dueno(request.user, pizzeria_id)
+            except PermissionDenied:
+                return Response({"error": "No tienes permiso sobre esa pizzería."}, status=403)
+
+        elif rol_actual in ["gerente", "subgerente"]:
+            tiene_permiso = UsuarioPizzeriaRol.objects.filter(
+                user=request.user,
+                pizzeria_id=pizzeria_id,
+                rol=rol_actual
+            ).exists()
+            if not tiene_permiso:
+                return Response({
+                    "error": f"Solo puedes agregar usuarios a la pizzería donde eres {rol_actual}."
+                }, status=403)
+
+        # Validar que no exista el usuario
+        if User.objects.filter(username=username).exists():
+            return Response({"error": "Ya existe un usuario con ese username."}, status=400)
+
+        # Crear el usuario
+        user = User.objects.create_user(username=username, password=password, email=email or "")
+
+        # Asignar el rol a esa pizzería
+        pizzeria = Pizzeria.objects.get(id=pizzeria_id)
+        UsuarioPizzeriaRol.objects.create(user=user, pizzeria=pizzeria, rol=rol_asignar)
+
+        return Response({"mensaje": "Empleado creado y asignado correctamente."}, status=201)
+
+class EmpleadosDelDuenoAPIView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UsuarioPizzeriaRolSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        pizzeria_id = self.request.query_params.get("pizzeria_id")
+
+        queryset = UsuarioPizzeriaRol.objects.select_related("user", "pizzeria")
+
+        # Si se pasa un pizzeria_id, filtra por esa pizzería
+        if pizzeria_id:
+            try:
+                check_dueno(user, pizzeria_id)
+            except PermissionDenied:
+                return UsuarioPizzeriaRol.objects.none()
+
+            return queryset.filter(pizzeria_id=pizzeria_id)
+
+        #  Si no se pasa pizzeria_id, trae todos los empleados del dueño
+        return queryset.filter(pizzeria__dueno_asignaciones__dueno=user)

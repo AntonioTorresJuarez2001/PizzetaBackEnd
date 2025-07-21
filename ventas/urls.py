@@ -15,7 +15,9 @@ from .views import (
     ventas_por_dia,
     ventas_ayer,
     UsuarioPizzeriaRolListCreateAPIView,
-    UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView
+    UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView,
+    CrearEmpleadoAPIView,
+    EmpleadosDelDuenoAPIView
 )
 
 urlpatterns = [
@@ -46,5 +48,7 @@ urlpatterns = [
     path("ventas/<int:venta_id>/etapas/tiempos/", VentaEtapaDuracionesAPIView.as_view(), name="tiempos-entre-etapas"),
     path("ventas/<int:venta_id>/estado/", VentaEtapaActualAPIView.as_view(), name="estado-venta"),
     
+    path("empleados/", CrearEmpleadoAPIView.as_view(), name="crear-empleado"),
+    path("mis-empleados/", EmpleadosDelDuenoAPIView.as_view(), name="mis-empleados"),
     
 ]
