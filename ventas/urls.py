@@ -17,8 +17,10 @@ from .views import (
     UsuarioPizzeriaRolListCreateAPIView,
     UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView,
     CrearEmpleadoAPIView,
-    EmpleadosDelDuenoAPIView
-)
+    EmpleadosDelDuenoAPIView,
+    EstablecerPinPlanoAPIView,
+    ConsultarPinPlanoAPIView
+    )
 
 urlpatterns = [
     # Usuarios y resumen
@@ -51,4 +53,11 @@ urlpatterns = [
     path("empleados/", CrearEmpleadoAPIView.as_view(), name="crear-empleado"),
     path("mis-empleados/", EmpleadosDelDuenoAPIView.as_view(), name="mis-empleados"),
     
+    #Pin
+    path("pin/plano/establecer/", EstablecerPinPlanoAPIView.as_view(), name="establecer-pin-plano"),
+    path("pin/plano/consultar/", ConsultarPinPlanoAPIView.as_view(), name="consultar-pin-plano"),
+
+    
+    
+
 ]

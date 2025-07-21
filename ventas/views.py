@@ -22,6 +22,10 @@ from .serializers import (
 from drf_yasg.utils import swagger_auto_schema
 from ventas.utils.roles import get_rol_en_pizzeria
 
+from django.contrib.auth.models import User
+from .models import TokenNumericoPlano
+
+
 
 # ——————————————————————————————————————————
 # Utilidad para validar dueño de pizzería
@@ -813,3 +817,29 @@ class EmpleadosDelDuenoAPIView(ListAPIView):
 
         #  Si no se pasa pizzeria_id, trae todos los empleados del dueño
         return queryset.filter(pizzeria__dueno_asignaciones__dueno=user)
+
+
+class EstablecerPinPlanoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        pin = request.data.get("pin")
+
+        if not pin or not pin.isdigit() or len(pin) != 6:
+            return Response({"error": "El PIN debe tener 6 dígitos numéricos."}, status=400)
+
+        pin_obj, _ = TokenNumericoPlano.objects.get_or_create(user=request.user)
+        pin_obj.pin = pin
+        pin_obj.save()
+
+        return Response({"mensaje": "PIN Actualizado correctamente."})
+
+class ConsultarPinPlanoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            pin_obj = TokenNumericoPlano.objects.get(user=request.user)
+            return Response({"pin": pin_obj.pin})
+        except TokenNumericoPlano.DoesNotExist:
+            return Response({"pin": None})
