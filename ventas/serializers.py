@@ -193,10 +193,22 @@ class UsuarioPizzeriaRolSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UsuarioPizzeriaRol
-        fields = ["id", "user", "pizzeria", "rol", "creado", "user_display", "pizzeria_display"]
+        fields = [
+            "id", "user", "pizzeria", "rol", "creado",
+            "user_display", "pizzeria_display"
+        ]
 
     def validate(self, data):
+        user = data.get("user")
+        pizzeria = data.get("pizzeria")
+
+        # Si estamos creando, validar que no exista ya el mismo par user+pizzería
         if not self.instance:
-            if UsuarioPizzeriaRol.objects.filter(user=data["user"], pizzeria=data["pizzeria"]).exists():
-                raise serializers.ValidationError("Ese usuario ya tiene un rol en esta pizzería.")
+            if UsuarioPizzeriaRol.objects.filter(user=user, pizzeria=pizzeria).exists():
+                raise serializers.ValidationError("Ese usuario ya tiene un rol en esa pizzería.")
+
+        # Si estamos actualizando, impedir cambiar el user
+        if self.instance and user != self.instance.user:
+            raise serializers.ValidationError("No se puede cambiar el usuario asignado.")
+
         return data

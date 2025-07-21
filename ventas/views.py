@@ -671,26 +671,53 @@ class UsuarioPizzeriaRolListCreateAPIView(generics.ListCreateAPIView):
         serializer.save()
 
 class UsuarioPizzeriaRolRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+    queryset = UsuarioPizzeriaRol.objects.all()
     serializer_class = UsuarioPizzeriaRolSerializer
-    lookup_url_kwarg = "rol_id"
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "rol_id"  # <- Esto permite que siga usando <int:rol_id> en la URL
 
-    def get_queryset(self):
-        return UsuarioPizzeriaRol.objects.select_related("user", "pizzeria")
 
-    def perform_update(self, serializer):
-        rol_instance = self.get_object()
-        check_dueno(self.request.user, rol_instance.pizzeria_id)
-        instance = serializer.save()
+    def put(self, request, rol_id):
+        instance = self.get_object()
+        perfil = getattr(request.user, "perfil", None)
 
-        # Aquí actualizamos el perfil global con el nuevo rol
-        from ventas.models import UserProfile
-        try:
-            perfil = UserProfile.objects.get(user=instance.user)
-            perfil.rol = instance.rol
-            perfil.save()
-        except UserProfile.DoesNotExist:
-            pass
+        if not perfil:
+            return Response({"error": "Perfil no encontrado."}, status=400)
+
+        rol_actual = perfil.rol
+
+        # Validar permisos
+        if rol_actual in ["gerente", "subgerente"]:
+            if not UsuarioPizzeriaRol.objects.filter(
+                user=request.user,
+                pizzeria=instance.pizzeria,
+                rol=rol_actual
+            ).exists():
+                return Response(
+                    {"error": "No puedes editar empleados fuera de tu pizzería asignada."},
+                    status=403
+                )
+
+        elif rol_actual not in ["admin", "dueno", "gerente", "subgerente"]:
+            return Response({"error": "No tienes permisos para editar usuarios."}, status=403)
+
+        data = request.data.copy()
+
+        # Prevenir cambio de usuario
+        data["user"] = instance.user.id
+
+        # Dueños solo pueden asignar pizzerías que les pertenecen
+        if rol_actual == "dueno":
+            try:
+                check_dueno(request.user, data.get("pizzeria"))
+            except PermissionDenied:
+                return Response({"error": "No puedes asignar esa pizzería."}, status=403)
+
+        serializer = self.get_serializer(instance, data=data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data)
         
 class CrearEmpleadoAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
