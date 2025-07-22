@@ -20,12 +20,11 @@ from .serializers import (
     UsuarioPizzeriaRolSerializer
 )
 from drf_yasg.utils import swagger_auto_schema
-from ventas.utils.roles import get_rol_en_pizzeria
+# ventas/views.py
 
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 from .models import TokenNumericoPlano
-
-
 
 # ——————————————————————————————————————————
 # Utilidad para validar dueño de pizzería
@@ -843,3 +842,26 @@ class ConsultarPinPlanoAPIView(APIView):
             return Response({"pin": pin_obj.pin})
         except TokenNumericoPlano.DoesNotExist:
             return Response({"pin": None})
+
+@csrf_exempt  # ← necesario para permitir POST desde frontend sin CSRF token
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verificar_pin_plano(request):
+    """
+    Verifica si el PIN ingresado es correcto para el usuario autenticado.
+    """
+    user = request.user
+    pin_recibido = request.data.get("pin")
+
+    if not pin_recibido or len(pin_recibido) != 6:
+        return Response({"error": "PIN inválido"}, status=400)
+
+    try:
+        pin_obj = user.pin_plano  # ← relacionado con related_name en el modelo
+    except TokenNumericoPlano.DoesNotExist:
+        return Response({"error": "PIN no configurado"}, status=404)
+
+    if pin_obj.pin == pin_recibido:
+        return Response({"mensaje": "PIN válido"})
+    else:
+        return Response({"error": "PIN incorrecto"}, status=403)

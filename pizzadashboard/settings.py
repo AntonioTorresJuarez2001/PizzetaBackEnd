@@ -91,6 +91,11 @@ USE_TZ = False
 
 STATIC_URL = "/static/"
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",  # para desarrollo local con Vite/React
+]
+
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",

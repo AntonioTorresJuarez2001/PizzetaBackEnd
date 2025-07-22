@@ -19,7 +19,8 @@ from .views import (
     CrearEmpleadoAPIView,
     EmpleadosDelDuenoAPIView,
     EstablecerPinPlanoAPIView,
-    ConsultarPinPlanoAPIView
+    ConsultarPinPlanoAPIView,
+    verificar_pin_plano
     )
 
 urlpatterns = [
@@ -56,8 +57,6 @@ urlpatterns = [
     #Pin
     path("pin/plano/establecer/", EstablecerPinPlanoAPIView.as_view(), name="establecer-pin-plano"),
     path("pin/plano/consultar/", ConsultarPinPlanoAPIView.as_view(), name="consultar-pin-plano"),
-
-    
-    
+    path("pin/plano/verificar/", verificar_pin_plano),
 
 ]
