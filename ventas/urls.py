@@ -20,7 +20,8 @@ from .views import (
     EmpleadosDelDuenoAPIView,
     EstablecerPinPlanoAPIView,
     ConsultarPinPlanoAPIView,
-    verificar_pin_plano
+    verificar_pin_plano,
+    VentaRetrieveAPIView
     )
 
 urlpatterns = [
@@ -50,6 +51,8 @@ urlpatterns = [
     path("ventas/<int:venta_id>/etapas/", VentaEtapaListAPIView.as_view(), name="listar-etapas-venta"),
     path("ventas/<int:venta_id>/etapas/tiempos/", VentaEtapaDuracionesAPIView.as_view(), name="tiempos-entre-etapas"),
     path("ventas/<int:venta_id>/estado/", VentaEtapaActualAPIView.as_view(), name="estado-venta"),
+    path("ventas/<int:pk>/", VentaRetrieveAPIView.as_view(), name="venta-detalle"),
+
     
     path("empleados/", CrearEmpleadoAPIView.as_view(), name="crear-empleado"),
     path("mis-empleados/", EmpleadosDelDuenoAPIView.as_view(), name="mis-empleados"),

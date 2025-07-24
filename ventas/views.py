@@ -1,6 +1,6 @@
 # ventas/views.py
 from rest_framework import generics, permissions, status, serializers
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
@@ -201,6 +201,9 @@ class VentaRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroy
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+class VentaRetrieveAPIView(RetrieveAPIView):
+    queryset = Venta.objects.all()
+    serializer_class = VentaSerializer
 # ————————————————————————————————————————————————————————————————
 # 3) CRUD de Productos (anidados por pizzería)
 # ————————————————————————————————————————————————————————————————
