@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "ventas",
     'drf_yasg',
+    'inventario.apps.InventarioConfig',
 ]
 
 MIDDLEWARE = [
