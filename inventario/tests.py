@@ -8,7 +8,7 @@ from inventario.models import (
     Receta,
     Ingrediente,
 )
-from inventario.logic import registrar_salida_por_venta
+
 
 User = get_user_model()
 

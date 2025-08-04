@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "ventas",
     'drf_yasg',
     'inventario.apps.InventarioConfig',
+    'usuarios.apps.UsuariosConfig',
 ]
 
 MIDDLEWARE = [
@@ -120,3 +121,5 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

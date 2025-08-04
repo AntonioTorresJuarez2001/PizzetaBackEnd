@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa, UsuarioPizzeriaRol
+from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -180,35 +180,5 @@ class VentaEtapaSerializer(serializers.ModelSerializer):
         
         if nueva_etapa in etapas_actuales:
             raise serializers.ValidationError(f"La etapa '{nueva_etapa}' ya ha sido registrada.")
-
-        return data
-
-# Dueños
-class UsuarioPizzeriaRolSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
-    pizzeria = serializers.PrimaryKeyRelatedField(queryset=Pizzeria.objects.all())
-
-    user_display = serializers.StringRelatedField(source="user", read_only=True)
-    pizzeria_display = serializers.StringRelatedField(source="pizzeria", read_only=True)
-
-    class Meta:
-        model = UsuarioPizzeriaRol
-        fields = [
-            "id", "user", "pizzeria", "rol", "creado",
-            "user_display", "pizzeria_display"
-        ]
-
-    def validate(self, data):
-        user = data.get("user")
-        pizzeria = data.get("pizzeria")
-
-        # Si estamos creando, validar que no exista ya el mismo par user+pizzería
-        if not self.instance:
-            if UsuarioPizzeriaRol.objects.filter(user=user, pizzeria=pizzeria).exists():
-                raise serializers.ValidationError("Ese usuario ya tiene un rol en esa pizzería.")
-
-        # Si estamos actualizando, impedir cambiar el user
-        if self.instance and user != self.instance.user:
-            raise serializers.ValidationError("No se puede cambiar el usuario asignado.")
 
         return data
