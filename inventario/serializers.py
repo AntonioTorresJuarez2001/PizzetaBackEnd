@@ -3,6 +3,8 @@ from .models import Insumo, MovimientoInventario, Receta, Ingrediente
 
 
 class InsumoSerializer(serializers.ModelSerializer):
+    stock_actual = serializers.FloatField(read_only=True)
+
     class Meta:
         model = Insumo
         fields = '__all__'
