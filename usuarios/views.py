@@ -1,3 +1,4 @@
+import random
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.csrf import csrf_exempt
@@ -235,26 +236,39 @@ class ConsultarPinPlanoAPIView(APIView):
             return Response({"pin": None})
 
 
-@csrf_exempt  # ← necesario para permitir POST desde frontend sin CSRF token
+def generar_pin():
+    """Genera un PIN aleatorio de 6 dígitos."""
+    return f"{random.randint(0, 999999):06d}"
+
+
+@csrf_exempt
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def verificar_pin_plano(request):
     """
-    Verifica si el PIN ingresado es correcto para el usuario autenticado.
+    Verifica si el PIN ingresado es correcto y lo invalida generando uno nuevo automáticamente.
     """
     user = request.user
     pin_recibido = request.data.get("pin")
 
-    if not pin_recibido or len(pin_recibido) != 6:
+    if not pin_recibido or len(pin_recibido) != 6 or not pin_recibido.isdigit():
         return Response({"error": "PIN inválido"}, status=400)
 
     try:
-        pin_obj = user.pin_plano  # ← relacionado con related_name en el modelo
+        pin_obj = user.pin_plano  # gracias al related_name
     except TokenNumericoPlano.DoesNotExist:
         return Response({"error": "PIN no configurado"}, status=404)
 
-    if pin_obj.pin == pin_recibido:
-        return Response({"mensaje": "PIN válido"})
-    else:
+    if pin_obj.pin != pin_recibido:
         return Response({"error": "PIN incorrecto"}, status=403)
 
+    # PIN válido → reemplazar por uno nuevo
+    nuevo_pin = generar_pin()
+    pin_obj.pin = nuevo_pin
+    pin_obj.save()
+
+    return Response({
+        "mensaje": "PIN válido y reemplazado",
+        # Solo enviar el nuevo PIN si el flujo lo necesita
+        # "nuevo_pin": nuevo_pin
+    })
