@@ -10,6 +10,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from usuarios.utils.roles import check_dueno
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+
 
 
 from usuarios.models import (
@@ -52,9 +55,21 @@ class UsuarioPizzeriaRolListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = UsuarioPizzeriaRolSerializer
 
     def get_queryset(self):
-        return UsuarioPizzeriaRol.objects.filter(
-            pizzeria__dueno_asignaciones__dueno=self.request.user
-        ).select_related("user", "pizzeria")
+        # Evitar que Swagger ejecute lógica que depende de kwargs
+        if getattr(self, 'swagger_fake_view', False):
+            return UsuarioPizzeriaRol.objects.none()
+
+        pizzeria_id = self.kwargs["pizzeria_id"]
+
+        # Validar que el usuario tenga permiso sobre esta pizzería
+        try:
+            check_dueno(self.request.user, pizzeria_id)
+        except PermissionDenied:
+            return UsuarioPizzeriaRol.objects.none()
+
+        return UsuarioPizzeriaRol.objects.filter(pizzeria_id=pizzeria_id)
+
+
 
     def perform_create(self, serializer):
         pizzeria_obj = serializer.validated_data.get("pizzeria")
@@ -209,9 +224,31 @@ class EmpleadosDelDuenoAPIView(ListAPIView):
         #  Si no se pasa pizzeria_id, trae todos los empleados del dueño
         return queryset.filter(pizzeria__dueno_asignaciones__dueno=user)
 
+def generar_pin():
+    """Genera un PIN aleatorio de 6 dígitos."""
+    return f"{random.randint(0, 999999):06d}"
+
 class EstablecerPinPlanoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        tags=["PIN"],
+        operation_description="Establece o actualiza el PIN de 6 dígitos del usuario autenticado.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["pin"],
+            properties={
+                "pin": openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="PIN numérico de 6 dígitos."
+                ),
+            },
+        ),
+        responses={
+            200: openapi.Response("PIN actualizado correctamente"),
+            400: openapi.Response("PIN inválido"),
+        },
+    )
     def post(self, request):
         pin = request.data.get("pin")
 
@@ -228,6 +265,21 @@ class EstablecerPinPlanoAPIView(APIView):
 class ConsultarPinPlanoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        tags=["PIN"],
+        operation_description="Consulta el PIN actual del usuario autenticado. ",
+        responses={
+            200: openapi.Response(
+                "PIN actual o null si no está configurado",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "pin": openapi.Schema(type=openapi.TYPE_STRING, description="PIN numérico o null")
+                    }
+                )
+            ),
+        },
+    )
     def get(self, request):
         try:
             pin_obj = TokenNumericoPlano.objects.get(user=request.user)
@@ -236,18 +288,31 @@ class ConsultarPinPlanoAPIView(APIView):
             return Response({"pin": None})
 
 
-def generar_pin():
-    """Genera un PIN aleatorio de 6 dígitos."""
-    return f"{random.randint(0, 999999):06d}"
-
-
 @csrf_exempt
+@swagger_auto_schema(
+    method="post",
+    tags=["PIN"],
+    operation_description="Verifica si el PIN ingresado es correcto y lo invalida generando uno nuevo automáticamente.",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=["pin"],
+        properties={
+            "pin": openapi.Schema(
+                type=openapi.TYPE_STRING,
+                description="PIN numérico de 6 dígitos."
+            ),
+        },
+    ),
+    responses={
+        200: openapi.Response("PIN válido y reemplazado"),
+        400: openapi.Response("PIN inválido"),
+        403: openapi.Response("PIN incorrecto"),
+        404: openapi.Response("PIN no configurado"),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def verificar_pin_plano(request):
-    """
-    Verifica si el PIN ingresado es correcto y lo invalida generando uno nuevo automáticamente.
-    """
     user = request.user
     pin_recibido = request.data.get("pin")
 
@@ -255,20 +320,15 @@ def verificar_pin_plano(request):
         return Response({"error": "PIN inválido"}, status=400)
 
     try:
-        pin_obj = user.pin_plano  # gracias al related_name
+        pin_obj = user.pin_plano
     except TokenNumericoPlano.DoesNotExist:
         return Response({"error": "PIN no configurado"}, status=404)
 
     if pin_obj.pin != pin_recibido:
         return Response({"error": "PIN incorrecto"}, status=403)
 
-    # PIN válido → reemplazar por uno nuevo
     nuevo_pin = generar_pin()
     pin_obj.pin = nuevo_pin
     pin_obj.save()
 
-    return Response({
-        "mensaje": "PIN válido y reemplazado",
-        # Solo enviar el nuevo PIN si el flujo lo necesita
-        # "nuevo_pin": nuevo_pin
-    })
+    return Response({"mensaje": "PIN válido y reemplazado"})
