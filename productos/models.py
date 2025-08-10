@@ -38,6 +38,8 @@ class Producto(models.Model):
         ordering = ["nombre"]              # <- esto hace que no proponga AlterModelOptions
         verbose_name = "Producto"
         verbose_name_plural = "Productos"
+        unique_together = ("pizzeria", "nombre")
+
     def __str__(self):
         return f"{self.nombre} ({self.pizzeria.nombre})"
 
