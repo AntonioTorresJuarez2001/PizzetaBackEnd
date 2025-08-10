@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'inventario.apps.InventarioConfig',
     'usuarios.apps.UsuariosConfig',
+    "productos"
 ]
 
 MIDDLEWARE = [

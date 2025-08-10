@@ -2,7 +2,9 @@ from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from django.contrib.auth.models import User
-from ventas.models import Pizzeria, Producto, Venta, DuenoPizzeria
+from ventas.models import Pizzeria, Venta
+from usuarios.models import DuenoPizzeria
+from productos.models import Producto
 from faker import Faker
 
 fake = Faker()

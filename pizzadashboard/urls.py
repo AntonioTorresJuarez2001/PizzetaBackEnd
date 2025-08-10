@@ -31,6 +31,7 @@ urlpatterns = [
     # Apps principales
     path("api/", include("usuarios.urls")),
     path("api/", include("ventas.urls")),
+    path("api/", include("productos.urls")),
     path("api/inventario/", include("inventario.urls")),
 
     # Documentación Swagger y Redoc

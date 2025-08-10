@@ -8,11 +8,8 @@ from ventas.views import (
     VentaListCreateAPIView,
     VentaRetrieveUpdateDestroyByPizzeriaAPIView,
     VentaRetrieveAPIView,
-
-    # Productos
-    ProductoListCreateByPizzeriaAPIView,
     resumen_ventas,
-    ProductoRetrieveUpdateDestroyByPizzeriaAPIView,
+
 
     # Etapas
     VentaEtapaCreateAPIView,
@@ -40,11 +37,6 @@ urlpatterns = [
     path("pizzerias/<int:pizzeria_id>/ventas/<int:venta_id>/", VentaRetrieveUpdateDestroyByPizzeriaAPIView.as_view(), name="venta-detail-by-pizzeria"),
     path("ventas/<int:pk>/", VentaRetrieveAPIView.as_view(), name="venta-detalle"),
 
-    # ——————————————————————————————————————————
-    # CRUD Productos (por pizzería)
-    # ——————————————————————————————————————————
-    path("pizzerias/<int:pizzeria_id>/productos/", ProductoListCreateByPizzeriaAPIView.as_view(), name="productos-por-pizzeria"),
-    path("pizzerias/<int:pizzeria_id>/productos/<int:pk>/", ProductoRetrieveUpdateDestroyByPizzeriaAPIView.as_view(), name="producto-detail-by-pizzeria"),
 
     # ——————————————————————————————————————————
     # Etapas de Venta

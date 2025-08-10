@@ -11,13 +11,14 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from usuarios.permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
-from .models import Pizzeria, Venta, Producto, VentaEtapa, User
+from .models import Pizzeria, Venta, VentaEtapa, User
+from productos.models import Producto
 from .serializers import (
     PizzeriaSerializer,
     VentaSerializer,
-    ProductoSerializer,
     VentaEtapaSerializer,
 )
+
 from drf_yasg.utils import swagger_auto_schema
 # ventas/views.py
 from django.views.decorators.csrf import csrf_exempt
@@ -174,69 +175,6 @@ class VentaRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroy
 class VentaRetrieveAPIView(RetrieveAPIView):
     queryset = Venta.objects.all()
     serializer_class = VentaSerializer
-# ————————————————————————————————————————————————————————————————
-# 3) CRUD de Productos (anidados por pizzería)
-# ————————————————————————————————————————————————————————————————
-
-class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
-    serializer_class = ProductoSerializer
-
-    @swagger_auto_schema(tags=["Productos"])
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=["Productos"])
-    def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
-
-    def get_queryset(self):
-        pizzeria_id = self.kwargs["pizzeria_id"]
-        check_dueno(self.request.user, pizzeria_id)
-        return Producto.objects.filter(pizzeria_id=pizzeria_id)
-
-    def perform_create(self, serializer):
-        pizzeria_id = self.kwargs["pizzeria_id"]
-        check_dueno(self.request.user, pizzeria_id)
-        serializer.save(pizzeria_id=pizzeria_id)
-
-
-class ProductoRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
-    serializer_class = ProductoSerializer
-    lookup_url_kwarg = "pk"
-
-    @swagger_auto_schema(tags=["Productos"])
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=["Productos"])
-    def put(self, request, *args, **kwargs):
-        return super().put(request, *args, **kwargs)
-    
-    @swagger_auto_schema(tags=["Productos"])
-    def patch(self, request, *args, **kwargs):
-        return super().patch(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=["Productos"])
-    def delete(self, request, *args, **kwargs):
-        return super().delete(request, *args, **kwargs)
-
-    def get_queryset(self):
-        pizzeria_id = self.kwargs["pizzeria_id"]
-        check_dueno(self.request.user, pizzeria_id)
-        return Producto.objects.filter(pizzeria_id=pizzeria_id)
-
-    def destroy(self, request, *args, **kwargs):
-        producto = self.get_object()
-        try:
-            producto.delete()
-        except ProtectedError:
-            return Response(
-                {"detail": "No puedes eliminar un producto que ya ha sido vendido."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ——————————————————————————————————————————

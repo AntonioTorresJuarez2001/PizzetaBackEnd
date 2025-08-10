@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
-from ventas.models import Producto, Venta, Pizzeria  # usa tus modelos ya existentes
+from ventas.models import Venta, Pizzeria  # usa tus modelos ya existentes
+from productos.models import Producto
 
 
 class Insumo(models.Model):
@@ -56,7 +57,7 @@ class MovimientoInventario(models.Model):
 
 class Receta(models.Model):
     producto = models.ForeignKey(
-        Producto,
+        "productos.Producto",
         on_delete=models.CASCADE,
         related_name='recetas'
     )

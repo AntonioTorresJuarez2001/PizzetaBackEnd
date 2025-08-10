@@ -1,8 +1,11 @@
 from rest_framework import serializers
-from .models import Pizzeria, Venta, Producto, VentaProducto, VentaEtapa
+from .models import Pizzeria, Venta, VentaProducto, VentaEtapa
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
+from productos.models import Producto
+from productos.serializers import ProductoSerializer
+
 
 # ————————————————————————————————————————————
 # Serializador de Pizzería
@@ -21,31 +24,6 @@ class PizzeriaSerializer(serializers.ModelSerializer):
             "nombre": {"required": True},
             "direccion": {"required": False, "allow_null": True, "allow_blank": True},
             "telefono": {"required": False, "allow_null": True, "allow_blank": True},
-        }
-
-
-# ————————————————————————————————————————————
-# Serializador de Producto
-# ————————————————————————————————————————————
-class ProductoSerializer(serializers.ModelSerializer):
-    pizzeria = serializers.PrimaryKeyRelatedField(read_only=True)
-
-    class Meta:
-        model = Producto
-        fields = [
-            'id',
-            'nombre',
-            'precio',
-            'categoria',
-            'descripcion',
-            'activo',
-            'pizzeria',
-            'created_at',
-        ]
-        extra_kwargs = {
-            'categoria': {'required': True, 'allow_blank': False},
-            'descripcion': {'required': False, 'allow_blank': True},
-            'activo': {'required': True},
         }
 
 
