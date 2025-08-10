@@ -1,5 +1,7 @@
 # productos/models.py
 from django.db import models
+from django.db.models import UniqueConstraint
+from django.db.models.functions import Lower
 
 class Producto(models.Model):
     """
@@ -34,11 +36,16 @@ class Producto(models.Model):
     created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "producto"              # MISMA tabla
-        ordering = ["nombre"]              # <- esto hace que no proponga AlterModelOptions
+        db_table = "producto"
+        ordering = ["nombre"]
         verbose_name = "Producto"
         verbose_name_plural = "Productos"
-        unique_together = ("pizzeria", "nombre")
+        constraints = [
+            UniqueConstraint(
+                Lower("nombre"), "pizzeria",
+                name="uniq_producto_nombre_pizzeria_ci"
+            )
+        ]
 
     def __str__(self):
         return f"{self.nombre} ({self.pizzeria.nombre})"
