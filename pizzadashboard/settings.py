@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "tu-secret-key"
 DEBUG = True
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["162.214.66.212", "localhost", "127.0.0.1"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -100,6 +100,8 @@ CSRF_TRUSTED_ORIGINS = [
 
 
 CORS_ALLOWED_ORIGINS = [
+    "http://162.214.66.212:5173",    # IP del backend 
+   # "http://162.214.158.180:5173",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
