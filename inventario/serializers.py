@@ -17,6 +17,22 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = MovimientoInventario
         fields = '__all__'
+        
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and request.user and request.user.is_authenticated:
+            validated_data.setdefault("usuario", request.user)  # ← CLAVE
+        obj = MovimientoInventario(**validated_data)
+        obj.full_clean()   # valida y normaliza unidades
+        obj.save()
+        return obj
+
+    def update(self, instance, validated_data):
+        for k, v in validated_data.items():
+            setattr(instance, k, v)
+        instance.full_clean()
+        instance.save()
+        return instance
 
 
 class IngredienteSerializer(serializers.ModelSerializer):

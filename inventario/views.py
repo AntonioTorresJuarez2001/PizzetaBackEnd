@@ -280,7 +280,7 @@ class MovimientoInventarioListCreateView(generics.ListCreateAPIView):
         # Filtro por tipo de movimiento
         tipo_movimiento = self.request.query_params.get("tipo_movimiento")
         if tipo_movimiento:
-            queryset = queryset.filter(tipo_movimiento=tipo_movimiento)
+            queryset = queryset.filter(tipo=tipo_movimiento)
         
         # Filtro por insumo
         insumo_id = self.request.query_params.get("insumo_id")
@@ -381,13 +381,12 @@ class RecetaListView(generics.ListAPIView):
                 queryset = queryset.filter(activa=False)
         
         # Ordenamiento
-        ordering = self.request.query_params.get("ordering", "nombre")
-        if ordering:
-            try:
-                queryset = queryset.order_by(ordering)
-            except:
-                queryset = queryset.order_by("nombre")
-        
+        ordering = self.request.query_params.get("ordering", "producto__nombre")  # default sensato
+        try:
+            queryset = queryset.order_by(ordering)
+        except Exception:
+            queryset = queryset.order_by("-fecha_creacion")  # fallback válido
+            
         return queryset
 
 
