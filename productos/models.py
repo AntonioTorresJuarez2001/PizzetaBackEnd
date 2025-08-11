@@ -16,6 +16,8 @@ class Producto(models.Model):
         on_delete=models.CASCADE,
         related_name="productos"
     )
+    id_externo  = models.PositiveBigIntegerField(null=True, blank=True, help_text="Id_Pro del catálogo base de Martin")
+
     nombre      = models.CharField(max_length=100)
     precio      = models.DecimalField(max_digits=8, decimal_places=2)
 
@@ -41,10 +43,8 @@ class Producto(models.Model):
         verbose_name = "Producto"
         verbose_name_plural = "Productos"
         constraints = [
-            UniqueConstraint(
-                Lower("nombre"), "pizzeria",
-                name="uniq_producto_nombre_pizzeria_ci"
-            )
+            UniqueConstraint(fields=["pizzeria", "id_externo"], name="uniq_producto_idexterno_por_pizzeria"),
+            UniqueConstraint(fields=["pizzeria", "nombre"], name="uniq_producto_nombre_por_pizzeria"),
         ]
 
     def __str__(self):

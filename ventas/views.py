@@ -76,14 +76,70 @@ class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView
 # 2) CRUD Ventas
 # ------------------------------------------
 class VentaListCreateAPIView(generics.ListCreateAPIView):
+    """
+    API para listar y registrar ventas de una pizzería específica.
+
+    Flujo recomendado para integradores externos:
+    1. **Registrar o consultar productos existentes**
+       - Endpoint: `POST /pizzerias/{pizzeria_id}/productos/`
+       - El campo `id_externo` puede ser usado para relacionar productos con catálogos de nartin.
+       - `id_externo` es opcional y puede ser `null` para productos propios no presentes en el catálogo base.
+       - El mismo `id_externo` puede repetirse en distintas pizzerías.
+
+    2. **Registrar la venta**
+       - Endpoint: `POST /pizzerias/{pizzeria_id}/ventas/`
+       - En `items.producto` se debe enviar el **ID interno** del producto mio (no `id_externo` que es el id_prod).
+       - `producto_detalle` es opcional y puede incluir información del producto, o dejar que la API la genere.
+
+    Ejemplo de request para registrar una venta:
+
+    {
+      "canal": "Mostrador",
+      "metodo_pago": "Efectivo",
+      "items": [
+        {
+          "producto": 181,  # ID interno del producto en el sistema
+          "producto_detalle": {
+            "id_externo": 1234512345,  # Puede ser null si es producto propio o con numero si viene de cat Martin
+            "nombre": "Pizza Mediana Toño",
+            "precio": "159.00",
+            "categoria": "Pizza",
+            "descripcion": "Masa delgada",
+            "activo": true
+          },
+          "cantidad": 2
+        }
+      ]
+    }
+
+    Notas:
+    - `id_externo` puede ser omitido o `null` si el producto es propio.
+    - Al registrar una venta, el sistema crea automáticamente la etapa inicial "toma_pedido_inicio".
+    """
     permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
     serializer_class = VentaSerializer
 
-    @swagger_auto_schema(tags=["Ventas"])
+    @swagger_auto_schema(
+        tags=["Ventas"],
+        operation_summary="Lista o registra ventas",
+        operation_description="""
+        Lista todas las ventas de una pizzería o registra una nueva.
+
+        Notas importantes:
+        - `items.producto` debe ser el ID interno del producto en la pizzería.
+        - `id_externo` es opcional en `producto_detalle` y puede ser `null`.
+        - El sistema crea automáticamente una etapa "toma_pedido_inicio" al registrar una venta.
+        """,
+    )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=["Ventas"])
+    @swagger_auto_schema(
+        tags=["Ventas"],
+        operation_summary="Registrar una nueva venta",
+        request_body=VentaSerializer,
+        responses={201: "Venta creada correctamente"},
+    )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -94,7 +150,7 @@ class VentaListCreateAPIView(generics.ListCreateAPIView):
 
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "permitir_vacia": True}
-    
+
     def perform_create(self, serializer):
         pizzeria_id = self.kwargs["pizzeria_id"]
         check_dueno(self.request.user, pizzeria_id)

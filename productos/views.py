@@ -77,19 +77,94 @@ def _reset_pk_sequence_portable(model):
 # ─────────────────────────────────────────────────────────────
 
 class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
+    """
+    Vista API para listar y crear productos asociados a una pizzería específica.
+
+    Esta vista combina dos funcionalidades:
+    - **GET**: Lista todos los productos de una pizzería específica.
+    - **POST**: Crea un nuevo producto en la pizzería indicada (solo el dueño puede hacerlo).
+
+    Reglas de acceso:
+    - Solo usuarios autenticados pueden acceder.
+    - Empleados tienen permiso de solo lectura (GET).
+    - Solo el dueño de la pizzería puede crear productos (POST).
+
+    Parámetros de URL:
+    - pizzeria_id (int): Identificador único de la pizzería.
+
+    Respuestas:
+    - 200 OK: Lista de productos (GET).
+    - 201 Created: Producto creado exitosamente (POST).
+    - 403 Forbidden: Si el usuario no tiene permisos.
+    - 404 Not Found: Si la pizzería no existe.
+    """
+
     permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
     serializer_class = ProductoSerializer
 
     @swagger_auto_schema(tags=["Productos"])
     def get(self, request, *args, **kwargs):
+        """
+        Obtiene la lista de todos productos de la pizzería especificada.
+
+        URL de ejemplo:
+            GET /pizzerias/{pizzeria_id}/productos/
+
+        Respuesta:
+        [
+            {
+                "id": 1,
+                "id_externo": 101,
+                "nombre": "Pizza Hawaiana",
+                "precio": "150.00",
+                "categoria": "Pizza",
+                "descripcion": "Pizza con piña y jamón",
+                "activo": true
+            },
+            ...
+        ]
+        """
         return super().get(request, *args, **kwargs)
 
     @swagger_auto_schema(tags=["Productos"])
     def post(self, request, *args, **kwargs):
+        """
+        Crea un nuevo producto en la pizzería especificada.
+
+        URL de ejemplo:
+            POST http://localhost:8001/api/pizzerias/{pizzeria_id}/productos/
+
+        Body de ejemplo:
+        {
+            "id_externo": 101, <-- id_pro de Martin
+            "nombre": "Pizza Hawaiana",
+            "precio": "150.00",
+            "categoria": "Pizza",
+            "descripcion": "Pizza con piña y jamón",
+            "activo": true
+        }
+
+        Respuesta:
+        {
+            "id": 5,
+            "id_externo": 101,
+            "nombre": "Pizza Hawaiana",
+            "precio": "150.00",
+            "categoria": "Pizza",
+            "descripcion": "Pizza con piña y jamón",
+            "activo": true
+        }
+        """
         return super().post(request, *args, **kwargs)
 
     def get_queryset(self):
-        # Evita side-effects cuando drf-yasg genera el esquema
+        """
+        Retorna el queryset de productos filtrado por `pizzeria_id`.
+        - Si `pizzeria_id` no está presente en la URL, retorna queryset vacío.
+
+        Retorna:
+            QuerySet de objetos Producto asociados a la pizzería indicada.
+        """
         if getattr(self, "swagger_fake_view", False):
             return Producto.objects.none()
 
@@ -102,6 +177,18 @@ class ProductoListCreateByPizzeriaAPIView(generics.ListCreateAPIView):
         return Producto.objects.filter(pizzeria_id=pizzeria_id)
 
     def perform_create(self, serializer):
+        """
+        Lógica personalizada para crear un producto.
+
+        Pasos:
+        1. Obtiene el `pizzeria_id` de la URL.
+        2. Verifica que el usuario autenticado sea dueño de la pizzería 
+           (`check_dueno` lanza excepción si no lo es).
+        3. Guarda el nuevo producto asignándolo a la pizzería correspondiente.
+
+        Parámetros:
+            serializer (ProductoSerializer): Instancia del serializador validada.
+        """
         pizzeria_id = self.kwargs["pizzeria_id"]
         # Solo dueño puede crear
         check_dueno(self.request.user, pizzeria_id)
@@ -391,14 +478,10 @@ class ImportProductosAPIView(APIView):
         }
 
     # ── Upsert ────────────────────────────────────────────────
-
-    def _create_or_update_producto(self, pizzeria_id: int, id_pro: int, nombre: str, categoria: str):
-        """
-        - Si existe ese PK (id) en esa pizzería, actualizar nombre/categoría.
-        - Si no existe, crear con id = Id_Pro, precio = 0, activo = True.
-        """
+    def _create_or_update_producto(self, pizzeria_id: int, id_pro: int, nombre: str, categoria: str, strategy: str = "skip"):
+        # Buscar por id_externo dentro de la pizzería
         try:
-            obj = Producto.objects.get(pk=id_pro, pizzeria_id=pizzeria_id)
+            obj = Producto.objects.get(pizzeria_id=pizzeria_id, id_externo=id_pro)
             changed = False
             if obj.nombre != nombre:
                 obj.nombre = nombre; changed = True
@@ -408,16 +491,35 @@ class ImportProductosAPIView(APIView):
                 obj.save(update_fields=["nombre", "categoria"])
             return obj, True
         except Producto.DoesNotExist:
-            # Evita duplicado de nombre dentro de la pizzería (case-insensitive)
-            if Producto.objects.filter(pizzeria_id=pizzeria_id, nombre__iexact=nombre).exists():
+            pass
+
+        # Conflicto por nombre en la pizzería
+        dup_qs = Producto.objects.filter(pizzeria_id=pizzeria_id, nombre__iexact=nombre)
+        if dup_qs.exists():
+            if strategy == "rename":
+                nombre = self._next_available_name(pizzeria_id, nombre)
+            elif strategy == "update_by_name":
+                obj = dup_qs.first()
+                changed = False
+                if obj.categoria != categoria:
+                    obj.categoria = categoria; changed = True
+                if obj.nombre != nombre:
+                    obj.nombre = nombre; changed = True
+                if changed:
+                    obj.save(update_fields=["nombre", "categoria"])
+                return obj, True
+            else:
                 raise ValueError("Conflicto: ya existe un producto con ese nombre en esta pizzería.")
-            obj = Producto(
-                id=id_pro,                   # <- fijamos PK según Id_Pro
-                pizzeria_id=pizzeria_id,
-                nombre=nombre,
-                categoria=categoria,
-                precio=0,
-                activo=True,
-            )
-            obj.save(force_insert=True)
-            return obj, False
+
+        # Crear nuevo (sin forzar PK)
+        obj = Producto(
+            pizzeria_id=pizzeria_id,
+            id_externo=id_pro,     # <- Id_Pro ahora vive aquí
+            nombre=nombre,
+            categoria=categoria,
+            precio=0,
+            activo=True,
+        )
+        obj.save()
+        return obj, False
+
