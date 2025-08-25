@@ -1,20 +1,25 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
-from .models import Insumo, MovimientoInventario, Receta
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from django.utils.decorators import method_decorator
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from .models import Insumo, MovimientoInventario, Receta, FormulaInsumo, LoteProduccion, ejecutar_lote_produccion
 from .serializers import (
     InsumoSerializer,
     MovimientoInventarioSerializer,
     RecetaSerializer,
-    RecetaConIngredientesSerializer
+    RecetaConIngredientesSerializer,
+    FormulaInsumoSerializer, 
+    FormulaInsumoCreateSerializer,
+    LoteProduccionSerializer
 )
 
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from django.utils.decorators import method_decorator
-
 # ========================
-# 📦 INSUMOS
+#  INSUMOS
 # ========================
 
 @method_decorator(
@@ -186,7 +191,7 @@ class InsumoDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 # ========================
-# ⚙️ MOVIMIENTOS
+#  MOVIMIENTOS
 # ========================
 
 @method_decorator(
@@ -303,7 +308,7 @@ class MovimientoInventarioListCreateView(generics.ListCreateAPIView):
 
 
 # ========================
-# 🍕 RECETAS
+#  RECETAS
 # ========================
 
 @method_decorator(
@@ -389,7 +394,6 @@ class RecetaListView(generics.ListAPIView):
             
         return queryset
 
-
 @method_decorator(
     name='get',
     decorator=swagger_auto_schema(
@@ -412,7 +416,6 @@ class RecetaDetailView(generics.RetrieveAPIView):
     """
     queryset = Receta.objects.all().prefetch_related('ingredientes')
     serializer_class = RecetaSerializer
-
 
 @method_decorator(
     name='post',
@@ -476,3 +479,59 @@ class RecetaCreateView(generics.CreateAPIView):
                 {"error": "Error interno del servidor", "details": str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+# Listar/crear fórmulas (sub-recetas)
+class FormulaInsumoListCreateView(generics.ListCreateAPIView):
+    queryset = FormulaInsumo.objects.all().prefetch_related('ingredientes__insumo', 'insumo_objetivo')
+
+    def get_serializer_class(self):
+        return FormulaInsumoCreateSerializer if self.request.method == 'POST' else FormulaInsumoSerializer
+
+    def get_queryset(self):
+        qs = self.queryset
+        insumo_id = self.request.query_params.get("insumo_objetivo")
+        if insumo_id:
+            try:
+                qs = qs.filter(insumo_objetivo_id=int(insumo_id))
+            except ValueError:
+                return qs.none()
+        activa = self.request.query_params.get("activa")
+        if activa is not None:
+            if activa.lower() in ('true', '1'):
+                qs = qs.filter(activa=True)
+            elif activa.lower() in ('false', '0'):
+                qs = qs.filter(activa=False)
+        ordering = self.request.query_params.get("ordering", "-fecha_creacion")
+        try:
+            qs = qs.order_by(ordering)
+        except Exception:
+            qs = qs.order_by("-fecha_creacion")
+        return qs
+
+class FormulaInsumoDetailView(generics.RetrieveAPIView):
+    queryset = FormulaInsumo.objects.all().prefetch_related('ingredientes__insumo', 'insumo_objetivo')
+    serializer_class = FormulaInsumoSerializer
+
+# Crear lotes (planeados)
+class LoteProduccionCreateView(generics.CreateAPIView):
+    queryset = LoteProduccion.objects.all()
+    serializer_class = LoteProduccionSerializer
+    permission_classes = [IsAuthenticated]
+
+# Confirmar lote: el usuario manda rendimiento_real aquí
+class LoteProduccionConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        lote = get_object_or_404(LoteProduccion, pk=pk)
+        rendimiento_real = request.data.get("rendimiento_real", None)
+        try:
+            if rendimiento_real is not None:
+                rendimiento_real = float(rendimiento_real)
+            ejecutar_lote_produccion(lote, rendimiento_real)
+            data = LoteProduccionSerializer(lote).data
+            return Response(data, status=status.HTTP_200_OK)
+        except (ValidationError, ValueError) as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": "Error interno del servidor", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

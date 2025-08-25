@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Insumo, MovimientoInventario, Receta, Ingrediente, SalidaAutomaticaVenta
+from .models import Insumo, MovimientoInventario, Receta, Ingrediente, SalidaAutomaticaVenta, FormulaInsumo, FormulaIngrediente, LoteProduccion
 
 # ---------- INSUMO ----------
 @admin.register(Insumo)
@@ -20,7 +20,6 @@ class InsumoAdmin(admin.ModelAdmin):
     def marcar_inactivos(self, request, queryset):
         queryset.update(activo=False)
 
-
 # ---------- MOVIMIENTOS ----------
 @admin.register(MovimientoInventario)
 class MovimientoInventarioAdmin(admin.ModelAdmin):
@@ -35,7 +34,6 @@ class MovimientoInventarioAdmin(admin.ModelAdmin):
     # (Opcional) Evitar ediciones después de crear:
     # def has_change_permission(self, request, obj=None):
     #     return False
-
 
 # ---------- RECETAS + INGREDIENTES ----------
 class IngredienteInline(admin.TabularInline):
@@ -54,7 +52,6 @@ class RecetaAdmin(admin.ModelAdmin):
     ordering = ("-fecha_creacion",)
     inlines = [IngredienteInline]
 
-
 # ---------- TRAZA DE SALIDAS POR VENTA ----------
 @admin.register(SalidaAutomaticaVenta)
 class SalidaAutomaticaVentaAdmin(admin.ModelAdmin):
@@ -63,3 +60,32 @@ class SalidaAutomaticaVentaAdmin(admin.ModelAdmin):
     search_fields = ("venta__id", "insumo__nombre")
     ordering = ("-id",)
     autocomplete_fields = ("venta", "insumo")
+
+class FormulaIngredienteInline(admin.TabularInline):
+    model = FormulaIngrediente
+    extra = 0
+    autocomplete_fields = ("insumo",)
+    fields = ("insumo", "cantidad", "unidad")
+
+@admin.register(FormulaInsumo)
+class FormulaInsumoAdmin(admin.ModelAdmin):
+    list_display = ("insumo_objetivo", "activa", "factor_rendimiento_esperado", "fecha_creacion")
+    list_filter  = ("activa", "insumo_objetivo__pizzeria")
+    search_fields = ("insumo_objetivo__nombre",)
+    ordering = ("-fecha_creacion",)
+    inlines = [FormulaIngredienteInline]
+
+@admin.register(LoteProduccion)
+class LoteProduccionAdmin(admin.ModelAdmin):
+    list_display = ("id", "formula", "pizzeria", "cantidad_objetivo", "unidad_objetivo",
+                    "rendimiento_real", "confirmado", "fecha")
+    list_filter  = ("confirmado", "pizzeria")
+    autocomplete_fields = ("formula", "usuario", "pizzeria")
+    readonly_fields = ("fecha",)
+    
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # si hay fórmula seleccionada, proponemos automáticamente la unidad del insumo objetivo
+        if obj and obj.formula:
+            form.base_fields["unidad_objetivo"].initial = obj.formula.insumo_objetivo.unidad
+        return form
