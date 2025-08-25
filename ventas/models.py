@@ -7,6 +7,7 @@ from django.utils.timezone import now
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.hashers import make_password, check_password
+from django.db.models import Q
 
 class Pizzeria(models.Model):
     nombre      = models.CharField(max_length=100)
@@ -62,6 +63,7 @@ class Venta(models.Model):
         default="MOSTRADOR"
     )
     metodo_pago  = models.CharField(max_length=50, default="EFECTIVO")
+    folio_ticket = models.CharField(max_length=50, blank=True, null=True, db_index=True)  
     created_at   = models.DateTimeField(auto_now_add=True)
     updated_at   = models.DateTimeField(auto_now=True)
 
@@ -69,6 +71,13 @@ class Venta(models.Model):
         db_table = "venta"
         verbose_name = "Venta"
         verbose_name_plural = "Ventas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pizzeria", "folio_ticket"],
+                name="uniq_pizzeria_folio",
+                condition=Q(folio_ticket__isnull=False) & ~Q(folio_ticket=""),
+            ),
+        ]
         ordering = ["-fecha"]
 
     def __str__(self):

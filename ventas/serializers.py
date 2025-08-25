@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db import IntegrityError, transaction
 from .models import Pizzeria, Venta, VentaProducto, VentaEtapa
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
@@ -57,6 +58,7 @@ class VentaSerializer(serializers.ModelSerializer):
             'canal',
             'metodo_pago',
             'items',
+            'folio_ticket'
         ]
         read_only_fields = ['id', 'dueno', 'fecha', 'total']
 
@@ -86,27 +88,46 @@ class VentaSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items', [])
         # Si no viene 'fecha', pon la actual
-        if 'fecha' not in validated_data or validated_data['fecha'] is None:
+        if not validated_data.get('fecha'):
             validated_data['fecha'] = timezone.now()
+
         # Calcular el total antes de crear la venta
-        total = sum(
-            item['producto'].precio * item['cantidad']
-            for item in items_data
-        )
+        total = sum(item['producto'].precio * item['cantidad'] for item in items_data)
         validated_data['total'] = total
 
-        venta = Venta.objects.create(**validated_data)
+        # Si el serializer permite folio_ticket, tómalo de validated_data; si no, de initial_data
+        provided_folio = validated_data.pop('folio_ticket', None)
+        if provided_folio is None:
+            provided_folio = self.initial_data.get('folio_ticket')
 
-        for item in items_data:
-            VentaProducto.objects.create(
-                venta=venta,
-                producto=item['producto'],
-                cantidad=item['cantidad']
+        try:
+            with transaction.atomic():
+                # Crear la venta primero (sin items)
+                venta = Venta.objects.create(**validated_data)
+
+                # Asignar folio (o generar uno basado en el id)
+                folio = provided_folio or str(venta.id)
+                venta.folio_ticket = folio
+                venta.save(update_fields=['folio_ticket'])  # valida unicidad por pizzería
+
+                # Crear items sólo si el folio fue aceptado por la BD
+                for item in items_data:
+                    VentaProducto.objects.create(
+                        venta=venta,
+                        producto=item['producto'],
+                        cantidad=item['cantidad'],
+                    )
+
+                return venta
+
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"folio_ticket": "Este folio ya existe en esta pizzería."}
             )
-        return venta
+
 
     def update(self, instance, validated_data):
-        # Validar que no haya etapas críticas ya registradas
+        # Validar etapas críticas
         etapas_bloqueo = {"preparacion_inicio", "envio_inicio", "pago"}
         etapas_existentes = set(instance.etapas.values_list("etapa", flat=True))
 
@@ -117,24 +138,28 @@ class VentaSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items', None)
 
         if items_data is not None:
-            total = sum(
-                item['producto'].precio * item['cantidad']
-                for item in items_data
-            )
+            total = sum(item['producto'].precio * item['cantidad'] for item in items_data)
             validated_data['total'] = total
 
         for attr, val in validated_data.items():
             setattr(instance, attr, val)
-        instance.save()
 
-        if items_data is not None:
-            instance.items.all().delete()
-            for item in items_data:
-                VentaProducto.objects.create(
-                    venta=instance,
-                    producto=item['producto'],
-                    cantidad=item['cantidad']
-                )
+        try:
+            with transaction.atomic():
+                instance.save()  # aquí valida unicidad del folio
+
+                if items_data is not None:
+                    instance.items.all().delete()
+                    for item in items_data:
+                        instance.items.create(
+                            producto=item['producto'],
+                            cantidad=item['cantidad']
+                        )
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"folio_ticket": "Este folio ya existe en esta pizzería."}
+            )
+
         return instance
 
 class VentaEtapaSerializer(serializers.ModelSerializer):

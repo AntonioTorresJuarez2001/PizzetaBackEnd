@@ -11,7 +11,7 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from usuarios.permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
-from .models import Pizzeria, Venta, VentaEtapa, User
+from .models import Pizzeria, Venta, VentaEtapa
 from productos.models import Producto
 from .serializers import (
     PizzeriaSerializer,
