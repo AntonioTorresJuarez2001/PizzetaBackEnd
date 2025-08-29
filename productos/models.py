@@ -44,7 +44,7 @@ class Producto(models.Model):
         verbose_name_plural = "Productos"
         constraints = [
             UniqueConstraint(fields=["pizzeria", "id_externo"], name="uniq_producto_idexterno_por_pizzeria"),
-            UniqueConstraint(fields=["pizzeria", "nombre"], name="uniq_producto_nombre_por_pizzeria"),
+            #UniqueConstraint(fields=["pizzeria", "nombre"], name="uniq_producto_nombre_por_pizzeria"),
         ]
 
     def __str__(self):
