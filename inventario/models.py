@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
-from ventas.models import Venta, Pizzeria
+from ventas.models import Venta
+from pizzerias.models import Pizzeria
 from productos.models import Producto
 from django.utils import timezone
 from .utils import convert_qty

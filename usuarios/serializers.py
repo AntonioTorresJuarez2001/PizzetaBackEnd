@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from ventas.models import Pizzeria
+from pizzerias.models import Pizzeria
 from usuarios.models import (
     UsuarioPizzeriaRol,
     DuenoPizzeria,

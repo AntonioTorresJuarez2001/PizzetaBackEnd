@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework import permissions
+from django.http import HttpResponse
 
 # drf-yasg
 from drf_yasg.views import get_schema_view
@@ -21,6 +22,8 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
+    path("", lambda request: HttpResponse("Bienvenido a Pizzeta API")),
+
     # Admin
     path("admin/", admin.site.urls),
 

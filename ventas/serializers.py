@@ -1,31 +1,11 @@
 from rest_framework import serializers
 from django.db import IntegrityError, transaction
-from .models import Pizzeria, Venta, VentaProducto, VentaEtapa
+from .models import Venta, VentaProducto, VentaEtapa
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.contrib.auth.models import User
 from productos.models import Producto
 from productos.serializers import ProductoSerializer
-
-
-# ————————————————————————————————————————————
-# Serializador de Pizzería
-# ————————————————————————————————————————————
-class PizzeriaSerializer(serializers.ModelSerializer):
-    total_ventas = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        read_only=True
-    )
-
-    class Meta:
-        model = Pizzeria
-        fields = ["id", "nombre", "direccion", "telefono", "total_ventas"]
-        extra_kwargs = {
-            "nombre": {"required": True},
-            "direccion": {"required": False, "allow_null": True, "allow_blank": True},
-            "telefono": {"required": False, "allow_null": True, "allow_blank": True},
-        }
 
 
 # ————————————————————————————————————————————

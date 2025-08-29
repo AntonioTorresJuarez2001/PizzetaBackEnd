@@ -7,7 +7,7 @@ from django.utils.timezone import now
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.hashers import make_password, check_password
-from ventas.models import Pizzeria
+from pizzerias.models import Pizzeria
 
 # Create your models here.
 class DuenoPizzeria(models.Model):

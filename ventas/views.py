@@ -11,10 +11,10 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from usuarios.permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
-from .models import Pizzeria, Venta, VentaEtapa
+from .models import Venta, VentaEtapa
+from pizzerias.models import Pizzeria
 from productos.models import Producto
 from .serializers import (
-    PizzeriaSerializer,
     VentaSerializer,
     VentaEtapaSerializer,
 )
@@ -26,51 +26,6 @@ from django.contrib.auth.models import User
 
 from usuarios.models import DuenoPizzeria
 from usuarios.utils.roles import check_dueno
-
-class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
-    serializer_class = PizzeriaSerializer
-
-    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
-    def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
-
-    def get_queryset(self):
-        return Pizzeria.objects.filter(
-            dueno_asignaciones__dueno=self.request.user
-        ).annotate(total_ventas=Sum("ventas__total"))
-
-    def perform_create(self, serializer):
-        pizzeria = serializer.save()
-        DuenoPizzeria.objects.create(dueno=self.request.user, pizzeria=pizzeria)
-
-class PizzeriaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
-    serializer_class = PizzeriaSerializer
-    lookup_url_kwarg = "pizzeria_id"
-
-    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
-    def put(self, request, *args, **kwargs):
-        return super().put(request, *args, **kwargs)
-    
-    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
-    def patch(self, request, *args, **kwargs):
-        return super().patch(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=["Unidades (Pizzerías)"])
-    def delete(self, request, *args, **kwargs):
-        return super().delete(request, *args, **kwargs)
-
-    def get_queryset(self):
-        return Pizzeria.objects.filter(dueno_asignaciones__dueno=self.request.user)
 
 # ------------------------------------------
 # 2) CRUD Ventas
@@ -321,7 +276,6 @@ class VentaEtapaListAPIView(generics.ListAPIView):
         venta_id = self.kwargs["venta_id"]
         return VentaEtapa.objects.filter(venta_id=venta_id).order_by("timestamp")
 
-
 class VentaEtapaDuracionesAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -350,7 +304,6 @@ class VentaEtapaDuracionesAPIView(APIView):
             "total_segundos": duracion_total,
             "total_minutos": round(duracion_total / 60, 2)
         })
-
 
 class VentaEtapaActualAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]

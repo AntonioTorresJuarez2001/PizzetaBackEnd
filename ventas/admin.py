@@ -1,10 +1,5 @@
 from django.contrib import admin
-from .models import Pizzeria, Venta
-
-@admin.register(Pizzeria)
-class PizzeriaAdmin(admin.ModelAdmin):
-    list_display = ("id", "nombre", "direccion", "telefono")
-    search_fields = ("nombre",)
+from .models import Venta
 
 @admin.register(Venta)
 class VentaAdmin(admin.ModelAdmin):

@@ -12,7 +12,7 @@ class Producto(models.Model):
       - activo: boolean
     """
     pizzeria    = models.ForeignKey(
-        "ventas.Pizzeria",
+        "pizzerias.Pizzeria",
         on_delete=models.CASCADE,
         related_name="productos"
     )

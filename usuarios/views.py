@@ -26,7 +26,7 @@ from usuarios.serializers import (
     TokenNumericoPlanoSerializer,
     UserProfileSerializer
 )
-from ventas.models import Pizzeria
+from pizzerias.models import Pizzeria
 
 # ——————————————————————————————————————————
 # 0) Usuario autenticado
