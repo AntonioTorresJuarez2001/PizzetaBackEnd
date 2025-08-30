@@ -8,6 +8,7 @@ from .serializers import (
 )
 from drf_yasg.utils import swagger_auto_schema
 from usuarios.models import DuenoPizzeria
+from django.db.models import Sum
 
 class PizzeriaListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]

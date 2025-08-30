@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/", include("ventas.urls")),
     path("api/", include("productos.urls")),
     path("api/inventario/", include("inventario.urls")),
+    path("api/", include("pizzerias.urls")),
 
     # Documentación Swagger y Redoc
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
