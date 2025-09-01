@@ -43,12 +43,18 @@ def sincronizar_locales():
                 "hora_cierre": parse_safe_time(item.get("hora_cierre")),
             }
 
-            Pizzeria.objects.update_or_create(
+            obj, created = Pizzeria.objects.update_or_create(
                 id_local=id_local,
                 defaults=pizzeria_data,
             )
+            estado = "Creado" if created else "Actualizado"
+            print(f"{estado} ➜ {obj.nombre}")
             count += 1
         except Exception as e:
             print(f"⚠️ Error procesando local ID {item.get('id_local')}: {e}")
 
-    print(f"✅ Sincronización completada: {count} pizzerías actualizadas o insertadas.")
+    print(f"Sincronización completada: {count} pizzerías actualizadas o insertadas.")
+
+# python manage.py shell
+# from pizzerias.sync_firebird import sincronizar_locales
+# sincronizar_locales()
