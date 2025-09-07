@@ -5,12 +5,13 @@ from pizzerias.models import Pizzeria
 def sincronizar_precios_firebird():
     url_productos = "http://localhost:8000/api/firebird/productos/"
     url_xlocalpro = "http://localhost:8000/api/firebird/xlocal-pro/"
+    url_xcrtapro = "http://localhost:8000/api/firebird/xcrta-pro/"
 
     total_actualizados = 0
     total_creados = 0
     errores = 0
 
-    # Obtener catálogo de productos: id_pro → {nombre, descripcion}
+    # 1. Catálogo general de productos
     try:
         response = requests.get(url_productos)
         response.raise_for_status()
@@ -18,7 +19,7 @@ def sincronizar_precios_firebird():
         catalogo_dict = {
             item["id_pro"]: {
                 "nombre": item.get("nombre", f"Producto #{item['id_pro']}"),
-                "descripcion": item.get("descripcion", None)
+                "descripcion": item.get("descripcion", "")
             }
             for item in catalogo
             if "id_pro" in item
@@ -27,6 +28,24 @@ def sincronizar_precios_firebird():
         print(f"❌ Error obteniendo catálogo de productos: {e}")
         return
 
+    # 2. Precios y activación desde XcrtaPro
+    try:
+        response = requests.get(url_xcrtapro)
+        response.raise_for_status()
+        precios = response.json()
+        precios_dict = {
+            item["Id_Pro"]: {
+                "precio": float(item.get("Precio_Menu") or 0),
+                "activo": str(item.get("fActivo", "0")).strip() == "1"
+            }
+            for item in precios
+            if "Id_Pro" in item
+        }
+    except Exception as e:
+        print(f"❌ Error obteniendo precios desde XcrtaPro: {e}")
+        return
+
+    # 3. Por cada pizzería, consultar productos disponibles
     for pizzeria in Pizzeria.objects.exclude(id_local__isnull=True):
         try:
             response = requests.get(f"{url_xlocalpro}{pizzeria.id_local}/")
@@ -41,6 +60,7 @@ def sincronizar_precios_firebird():
             try:
                 id_pro = item["Id_Pro"]
                 info = catalogo_dict.get(id_pro)
+                pricing = precios_dict.get(id_pro)
 
                 if not info:
                     print(f"⚠️ Producto {id_pro} no está en el catálogo. Ignorado.")
@@ -49,9 +69,9 @@ def sincronizar_precios_firebird():
                 defaults = {
                     "nombre": info["nombre"],
                     "descripcion": info["descripcion"],
-                    "precio": item.get("Precio_Fijo_Com_UB") or 0,
+                    "precio": pricing["precio"] if pricing else 0,
+                    "activo": pricing["activo"] if pricing else False,
                     "categoria": "General",
-                    "activo": True,
                 }
 
                 producto, creado = Producto.objects.get_or_create(
@@ -82,7 +102,7 @@ def sincronizar_precios_firebird():
                 print(f"⚠️ Error procesando producto {item.get('Id_Pro')} en local {pizzeria.id_local}: {e}")
                 errores += 1
 
-    print("\n✅ Sincronización finalizada.")
+    print("\n  Sincronización finalizada.")
     print(f"   Productos nuevos: {total_creados}")
     print(f"   Productos actualizados: {total_actualizados}")
     print(f"   Errores: {errores}")
