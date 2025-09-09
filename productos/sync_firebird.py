@@ -106,3 +106,7 @@ def sincronizar_precios_firebird():
     print(f"   Productos nuevos: {total_creados}")
     print(f"   Productos actualizados: {total_actualizados}")
     print(f"   Errores: {errores}")
+
+# python manage.py shell
+# from productos.sync_firebird import sincronizar_precios_firebird
+# sincronizar_precios_firebird()
