@@ -12,6 +12,7 @@ from datetime import datetime
 from usuarios.permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
 from .models import Venta, VentaEtapa, VentaProducto
+from ventas.models import Venta
 from pizzerias.models import Pizzeria
 from productos.models import Producto
 from .serializers import (
@@ -30,8 +31,10 @@ from django.contrib.auth.models import User
 from usuarios.models import DuenoPizzeria
 from usuarios.utils.roles import check_dueno
 from django.db import transaction
+from django.db.models.functions import ExtractMonth
+import calendar
 
-# ------------------------------------------
+# -----------------------------------------
 # 2) CRUD Ventas
 # ------------------------------------------
 class VentaListCreateAPIView(generics.ListCreateAPIView):
@@ -328,13 +331,12 @@ class VentaEtapaActualAPIView(APIView):
 def ventas_por_dia(request):
     user = request.user
     rango = request.query_params.get("rango", "hoy")
-    tipo = request.query_params.get("tipo", "total")  # 'total' o 'cantidad'
+    tipo = request.query_params.get("tipo", "total")
 
     hoy = now().date()
     inicio = hoy
     fin = hoy + timedelta(days=1)
 
-    # 🔹 parámetros opcionales
     anio_param = request.query_params.get("anio")
     mes_param = request.query_params.get("mes")
 
@@ -343,9 +345,8 @@ def ventas_por_dia(request):
         fin = hoy + timedelta(days=1)
 
     elif rango == "ayer":
-        ayer = hoy - timedelta(days=1)
-        inicio = ayer
-        fin = hoy  
+        inicio = hoy - timedelta(days=1)
+        fin = hoy
 
     elif rango == "semana":
         dias_desde_lunes = hoy.weekday()
@@ -354,7 +355,6 @@ def ventas_por_dia(request):
 
     elif rango == "mes":
         if anio_param and mes_param:
-            # 🔹 Caso: mes específico de un año (ej. mayo 2023)
             anio = int(anio_param)
             mes = int(mes_param)
             inicio = datetime(anio, mes, 1).date()
@@ -363,55 +363,57 @@ def ventas_por_dia(request):
             else:
                 fin = datetime(anio, mes + 1, 1).date()
         elif anio_param and not mes_param:
-            # 🔹 Caso: todos los meses de un año
             anio = int(anio_param)
             inicio = datetime(anio, 1, 1).date()
             fin = datetime(anio, 12, 31).date() + timedelta(days=1)
         else:
-            # 🔹 Caso por defecto: mes actual
             inicio = hoy.replace(day=1)
-            if hoy.month == 12:
-                fin = hoy.replace(year=hoy.year + 1, month=1, day=1)
-            else:
-                fin = hoy.replace(month=hoy.month + 1, day=1)
+            fin = (inicio.replace(month=hoy.month % 12 + 1, day=1)
+                   if hoy.month < 12 else datetime(hoy.year + 1, 1, 1).date())
 
-    elif rango == "anio":
-        if anio_param:
-            anio = int(anio_param)
-            inicio = datetime(anio, 1, 1).date()
-            fin = datetime(anio, 12, 31).date() + timedelta(days=1)
-        else:
-            anio_actual = hoy.year
-            inicio = hoy.replace(year=anio_actual - 4, month=1, day=1)
-            fin = hoy.replace(year=anio_actual, month=12, day=31) + timedelta(days=1)
+    elif rango == "anio" and anio_param:
+        anio = int(anio_param)
+        inicio = datetime(anio, 1, 1).date()
+        fin = datetime(anio, 12, 31).date() + timedelta(days=1)
 
-    # 🔹 Query base
+    # Query base
     qs = Venta.objects.filter(
         pizzeria__dueno_asignaciones__dueno=user,
         fecha__date__gte=inicio,
         fecha__date__lt=fin
     )
 
-    data = []
+    # === Agrupación por mes para todo el año ===
+    if rango == "anio" and anio_param:
+        ventas = qs.annotate(
+            mes=ExtractMonth("fecha")
+        ).values("mes").annotate(
+            total=Sum("total") if tipo == "total" else Count("id")
+        ).order_by("mes")
 
-    # =======================
-    # 📊 Caso rango = mes + mes específico → agrupación por día
-    # =======================
+        ventas_dict = {v["mes"]: v["total"] for v in ventas if v["mes"]}
+
+        data = []
+        for i in range(1, 13):
+            meses_esp = [
+                "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            ]
+            nombre_mes = meses_esp[i - 1]
+
+            total = ventas_dict.get(i, 0)
+            data.append({
+                "label": nombre_mes,
+                "total": int(total) if tipo == "cantidad" else float(total),
+            })
+
+        return Response(data)
+
+    # === Agrupación por día para un mes específico ===
     if rango == "mes" and mes_param:
-        if tipo == "cantidad":
-            ventas = (
-                qs.annotate(dia=TruncDate('fecha'))
-                .values('dia')
-                .annotate(total=Count('id'))
-                .order_by('dia')
-            )
-        else:
-            ventas = (
-                qs.annotate(dia=TruncDate('fecha'))
-                .values('dia')
-                .annotate(total=Sum('total'))
-                .order_by('dia')
-            )
+        ventas = qs.annotate(dia=TruncDate('fecha')).values('dia')\
+            .annotate(total=Count('id') if tipo == 'cantidad' else Sum('total'))\
+            .order_by('dia')
 
         meses_nombres = [
             "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -426,24 +428,13 @@ def ventas_por_dia(request):
             for v in ventas
         ]
 
-    # =======================
-    # 📊 Caso rango = mes + solo anio → agrupación por mes del año
-    # =======================
+        return Response(data)
+
+    # === Agrupación por mes (sin mes específico) ===
     elif rango == "mes" and anio_param and not mes_param:
-        if tipo == "cantidad":
-            ventas = (
-                qs.annotate(mes=TruncMonth('fecha'))
-                .values('mes')
-                .annotate(total=Count('id'))
-                .order_by('mes')
-            )
-        else:
-            ventas = (
-                qs.annotate(mes=TruncMonth('fecha'))
-                .values('mes')
-                .annotate(total=Sum('total'))
-                .order_by('mes')
-            )
+        ventas = qs.annotate(mes=TruncMonth('fecha')).values('mes')\
+            .annotate(total=Count('id') if tipo == 'cantidad' else Sum('total'))\
+            .order_by('mes')
 
         meses_nombres = [
             "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -458,32 +449,20 @@ def ventas_por_dia(request):
             for v in ventas if v["mes"]
         ]
 
-    # =======================
-    # 📊 Otros casos → respuesta básica por día
-    # =======================
-    else:
-        if tipo == "cantidad":
-            ventas = (
-                qs.annotate(dia=TruncDate('fecha'))
-                .values('dia')
-                .annotate(total=Count('id'))
-                .order_by('dia')
-            )
-        else:
-            ventas = (
-                qs.annotate(dia=TruncDate('fecha'))
-                .values('dia')
-                .annotate(total=Sum('total'))
-                .order_by('dia')
-            )
+        return Response(data)
 
-        data = [
-            {
-                "label": v["dia"].strftime("%d-%m-%Y"),
-                "total": int(v["total"]) if tipo == "cantidad" else float(v["total"]),
-            }
-            for v in ventas
-        ]
+    # === Default: agrupación por día ===
+    ventas = qs.annotate(dia=TruncDate('fecha')).values('dia')\
+        .annotate(total=Count('id') if tipo == 'cantidad' else Sum('total'))\
+        .order_by('dia')
+
+    data = [
+        {
+            "label": v["dia"].strftime("%d-%m-%Y"),
+            "total": int(v["total"]) if tipo == "cantidad" else float(v["total"]),
+        }
+        for v in ventas
+    ]
 
     return Response(data)
 
