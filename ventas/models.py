@@ -40,8 +40,8 @@ class Venta(models.Model):
         db_column="dueno_id",
         related_name="ventas_registradas"
     )
-    #fecha       = models.DateTimeField()
-    fecha        = models.DateTimeField(auto_now_add=True)
+    fecha       = models.DateTimeField()
+  #fecha        = models.DateTimeField(auto_now_add=True)
     total        = models.DecimalField(max_digits=10, decimal_places=2)
     canal        = models.CharField(
         max_length=50,

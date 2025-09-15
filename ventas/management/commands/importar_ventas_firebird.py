@@ -6,7 +6,7 @@ from pizzerias.models import Pizzeria
 from ventas.models import Venta, VentaProducto, VentaEtapa
 from ventas.services.firebird_hctaord import get_hctaord
 from django.db import transaction
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 from collections import defaultdict
 import time
@@ -21,18 +21,24 @@ class Command(BaseCommand):
         parser.add_argument("--id-local", type=int, required=True, help="ID del local Firebird")
         parser.add_argument("--crear-productos", action="store_true", help="Crear productos si no existen")
         parser.add_argument("--dry-run", action="store_true", help="Simular sin guardar en la base de datos")
+        parser.add_argument( "--limite-registros",type=int,help="Número máximo de registros totales a importar desde Firebird (últimos N registros)")
+        
+        parser.add_argument("--desde", type=int, help="Fecha Firebird inicial (como número, ej. 45100)")
+        parser.add_argument("--hasta", type=int, help="Fecha Firebird final (como número, ej. 45900)")
 
     def handle(self, *args, **options):
         id_local = options["id_local"]
         crear_productos = options["crear_productos"]
         dry_run = options["dry_run"]
+        limite = options.get("limite_registros")
+        ventas_procesadas = 0
 
         print(f"\n🚀 Iniciando importación total de ventas desde Firebird (local={id_local})\n")
 
         try:
             pizzeria = Pizzeria.objects.get(id_local=id_local)
         except Pizzeria.DoesNotExist:
-            self.stderr.write(f"❌ No se encontró una pizzería con id_local_firebird={id_local}")
+            self.stderr.write(f"❌ No se encontró una pizzería con id_local={id_local}")
             return
 
         # 🔍 Detectar primera fecha disponible
@@ -50,14 +56,13 @@ class Command(BaseCommand):
             return
 
         fechas = [r["Fecha"] for r in registros if "Fecha" in r]
-        fecha_min = min(fechas)
         hoy = now().date()
         base_date = datetime(1899, 12, 30)
-        fecha_max = (hoy - base_date.date()).days
+        fecha_min = options["desde"] if options["desde"] else min(fechas)
+        fecha_max = options["hasta"] if options["hasta"] else (hoy - base_date.date()).days
 
         print(f"📅 Rango detectado: {fecha_min} → {fecha_max}\n")
 
-        # Inicializar estadísticas
         importadas = 0
         existentes = 0
         con_errores = 0
@@ -77,6 +82,10 @@ class Command(BaseCommand):
                 cuentas[key].append(r)
 
             for (id_cta, fecha_fbd), items in cuentas.items():
+                if limite and ventas_procesadas >= limite:
+                    print(f"🛑 Límite de {limite} ventas alcanzado.")
+                    break
+
                 id_ord = items[0].get("Id_Ord", 1)
                 folio = f"{fecha_fbd}{id_local}{id_cta}"
 
@@ -95,26 +104,29 @@ class Command(BaseCommand):
                     continue
 
                 if dry_run:
-                    self.stdout.write(f"🧪 Simulando importación de venta {folio}")
+                    self.stdout.write(f"Simulando importación de venta {folio}")
                     importadas += 1
+                    ventas_procesadas += 1
                     continue
 
-                # ✅ Crear venta real
+                # Crear venta real
                 with transaction.atomic():
-                    
                     dueno = User.objects.filter(username="admin").first()
-                    
+
                     total = sum(r.get("M_Total") or 0 for r in items)
+
+                    # Convertir fecha Firebird a datetime real
+                    fecha_real = base_date + timedelta(days=fecha_fbd)
+
                     venta = Venta.objects.create(
                         pizzeria=pizzeria,
                         dueno=dueno,
-                        fecha=now(),
+                        fecha=fecha_real,
                         canal="MOSTRADOR",
                         metodo_pago="EFECTIVO",
                         folio_ticket=folio,
                         total=total
                     )
-
 
                     for r in items:
                         id_pro = r["Id_Pro"]
@@ -151,12 +163,16 @@ class Command(BaseCommand):
 
                     self.stdout.write(f"✅ Venta importada: {folio}")
                     importadas += 1
+                    ventas_procesadas += 1
+
+            if limite and ventas_procesadas >= limite:
+                break
 
             time.sleep(0.25)
 
         print("\n📊 RESUMEN FINAL")
-        print(f"Ventas importadas:   {importadas}")
-        print(f"Ventas ya existentes:{existentes}")
-        print(f"Ventas con errores:  {con_errores}")
-        print(f"Productos creados:   {productos_creados}")
-        print(f"Modo simulación:     {'Sí' if dry_run else 'No'}")
+        print(f"✅ Ventas importadas:   {importadas}")
+        print(f"📁 Ventas ya existentes:{existentes}")
+        print(f"⛔ Ventas con errores:  {con_errores}")
+        print(f"📦 Productos creados:   {productos_creados}")
+        print(f"🧪 Modo simulación:     {'Sí' if dry_run else 'No'}")
