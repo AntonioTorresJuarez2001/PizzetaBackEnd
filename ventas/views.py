@@ -11,13 +11,16 @@ from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from datetime import datetime
 from usuarios.permissions import EmpleadoSoloLecturaPermission
 from django.utils.timezone import now, timedelta
-from .models import Venta, VentaEtapa
+from .models import Venta, VentaEtapa, VentaProducto
 from pizzerias.models import Pizzeria
 from productos.models import Producto
 from .serializers import (
     VentaSerializer,
     VentaEtapaSerializer,
+    ProductoSerializer
 )
+import requests
+from .services.firebird_hctaord import get_hctaord, get_producto_firebird
 
 from drf_yasg.utils import swagger_auto_schema
 # ventas/views.py
@@ -26,6 +29,7 @@ from django.contrib.auth.models import User
 
 from usuarios.models import DuenoPizzeria
 from usuarios.utils.roles import check_dueno
+from django.db import transaction
 
 # ------------------------------------------
 # 2) CRUD Ventas
@@ -118,7 +122,6 @@ class VentaListCreateAPIView(generics.ListCreateAPIView):
             timestamp=now()
         )
 
-
 class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
     serializer_class = VentaSerializer
@@ -140,7 +143,6 @@ class VentaRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
         return Venta.objects.filter(
             pizzeria__dueno_asignaciones__dueno=self.request.user
         )
-
 
 class VentaRetrieveUpdateDestroyByPizzeriaAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
@@ -574,3 +576,219 @@ def ventas_ayer(request):
     })
 
 
+class FirebirdHctaordProxyAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _fmt_fecha_firebird(n):
+        """Convierte 45109 -> 'YYYY-MM-DD' (base 1899-12-30)."""
+        try:
+            base = datetime(1899, 12, 30)
+            return (base + timedelta(days=int(n))).strftime("%Y-%m-%d")
+        except Exception:
+            return n
+
+    @staticmethod
+    def _format_row(row):
+        # Formateo opcional
+        if isinstance(row.get("Fecha"), int):
+            row["FechaISO"] = FirebirdHctaordProxyAPIView._fmt_fecha_firebird(row["Fecha"])
+        # Redondear montos si existen
+        for k in ["M_Importe", "M_Total", "M_Neto", "M_Imp", "M_Imp_Desc", "P_Imp1", "P_Imp2", "Precio_Unit", "Precio_Modif"]:
+            if row.get(k) is not None:
+                try:
+                    row[k] = float(round(float(row[k]), 2))
+                except Exception:
+                    pass
+        # Hora a HH:MM:SS si viene como datetime string
+        if isinstance(row.get("Hora"), str) and "T" in row["Hora"]:
+            try:
+                row["Hora"] = row["Hora"].split("T")[1][:8]
+            except Exception:
+                pass
+        return row
+
+    @swagger_auto_schema(operation_summary="Proxy: Hctaord Firebird (solo lectura)")
+    def get(self, request, pizzeria_id):
+        """
+        GET /api/pizzerias/{pizzeria_id}/firebird/hctaord/
+          - Pasa filtros como query params: id_pro, id_emp, id_cta, id_linea, grupo, fecha_ini, fecha_fin
+          - Opcional: id_local (si no está mapeado en el modelo Pizzeria)
+          - Opcional: detalle de una cuenta => incluir id_cta y fecha
+          - Opcional: format=1 (devuelve campos con formateo amigable)
+        """
+        # Seguridad: validar dueño
+        check_dueno(request.user, pizzeria_id)
+
+        # Resolver id_local Firebird
+        pizzeria = Pizzeria.objects.get(pk=pizzeria_id)
+        id_local = request.query_params.get("id_local")
+        if not id_local:
+            # Si tu modelo Pizzeria ya tiene relación al local de Firebird, úsala:
+            id_local = getattr(pizzeria, "id_local_firebird", None)
+        if not id_local:
+            return Response(
+                {"detail": "Falta id_local. Pásalo como query param ?id_local=4 o agrega 'id_local_firebird' a Pizzeria."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Si piden una cuenta específica
+        id_cta = request.query_params.get("id_cta")
+        fecha = request.query_params.get("fecha")  # valor Firebird (número de días). Si prefieres ISO, luego mapeamos.
+
+        # Filtros permitidos
+        allowed = {"id_pro", "id_emp", "id_linea", "grupo", "fecha_ini", "fecha_fin", "min_total", "max_total"}
+        params = {k: v for k, v in request.query_params.items() if k in allowed}
+
+        try:
+            if id_cta and not fecha:
+                return Response({"detail": "Si envías id_cta, debes enviar también 'fecha' (formato Firebird)."}, status=400)
+
+            if id_cta and fecha:
+                data = get_hctaord(id_local=id_local, fecha=fecha, id_cta=id_cta, params=params)
+            else:
+                data = get_hctaord(id_local=None, fecha=None, id_cta=None, params={"id_local": id_local, **params})
+
+            # ¿Formatear?
+            if request.query_params.get("format") == "1":
+                if isinstance(data, list):
+                    data = [self._format_row(d) for d in data]
+                elif isinstance(data, dict):
+                    data = self._format_row(data)
+
+            return Response(data)
+
+        except requests.HTTPError as e:
+            return Response({"error": f"Firebird respondió {e.response.status_code}", "detail": str(e)}, status=502)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+class FirebirdImportVentaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pizzeria_id):
+        """
+        Importa una venta desde Firebird (tabla Hctaord) a Pizzeta.
+        Requiere query params: id_local, fecha (Firebird), id_cta.
+        - Si falta un producto en Pizzeta => devuelve advertencia y NO crea la venta.
+        """
+        id_local = request.query_params.get("id_local")
+        fecha = request.query_params.get("fecha")
+        id_cta = request.query_params.get("id_cta")
+        Id_Ord = request.query_params.get("Id_Ord")
+
+        if not (id_local and fecha and id_cta):
+            return Response(
+                {"detail": "Debes enviar id_local, fecha (Firebird) e id_cta"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Llamar Firebird
+        try:
+            registros = get_hctaord(id_local=id_local, fecha=fecha, id_cta=id_cta)
+        except Exception as e:
+            return Response({"error": f"Error al obtener datos de Firebird: {str(e)}"}, status=502)
+
+        if not registros:
+            return Response({"detail": "No se encontraron registros en Hctaord"}, status=404)
+
+        pizzeria = Pizzeria.objects.get(pk=pizzeria_id)
+        folio_ticket = f"{fecha}{id_local}{id_cta}"
+
+        # Validar si ya existe
+        if Venta.objects.filter(pizzeria=pizzeria, folio_ticket=folio_ticket).exists():
+            return Response(
+                {"detail": "La venta ya existe en Pizzeta", "folio_ticket": folio_ticket},
+                status=status.HTTP_200_OK
+            )
+
+        # Verificar productos
+        faltantes = []
+        for r in registros:
+            id_pro = r.get("Id_Pro")
+            if not Producto.objects.filter(pizzeria=pizzeria, id_externo=id_pro).exists():
+                faltantes.append({
+                    "id_pro": id_pro,
+                    "producto": r.get("Producto"),
+                    "precio_unit": r.get("Precio_Unit"),
+                    "linea": r.get("Linea")
+                })
+
+        if faltantes:
+            return Response(
+                {
+                    "detail": "Existen productos en Firebird que no están en Pizzeta.",
+                    "faltantes": faltantes
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Crear venta y items
+        with transaction.atomic():
+            total = sum(r.get("M_Total") or 0 for r in registros)
+
+            venta = Venta.objects.create(
+                pizzeria=pizzeria,
+                dueno=request.user,
+                fecha=now(),
+                canal="MOSTRADOR",
+                metodo_pago="EFECTIVO",
+                folio_ticket=folio_ticket,
+                total=total
+            )
+
+            for r in registros:
+                producto = Producto.objects.get(pizzeria=pizzeria, id_externo=r.get("Id_Pro"))
+                cantidad = int(r.get("Porciones") or 1)
+
+                VentaProducto.objects.create(
+                    venta=venta,
+                    producto=producto,
+                    cantidad=cantidad
+                )
+
+            VentaEtapa.objects.create(
+                venta=venta,
+                etapa="toma_pedido_inicio",
+                timestamp=now()
+            )
+
+        return Response(VentaSerializer(venta).data, status=201)
+
+class CrearProductoDesdeFirebirdAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pizzeria_id, id_pro):
+        """
+        Crea un producto en Pizzeta basado en un producto de Firebird.
+        """
+        # Validar permisos
+        check_dueno(request.user, pizzeria_id)
+        pizzeria = Pizzeria.objects.get(pk=pizzeria_id)
+
+        # Verificar si ya existe
+        if Producto.objects.filter(pizzeria=pizzeria, id_externo=id_pro).exists():
+            return Response(
+                {"detail": f"El producto con id_externo={id_pro} ya existe en esta pizzería."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Obtener datos de Firebird
+        try:
+            data = get_producto_firebird(id_pro)
+        except Exception as e:
+            return Response({"error": f"No se pudo obtener el producto {id_pro} de Firebird", "detail": str(e)},
+                            status=status.HTTP_502_BAD_GATEWAY)
+
+        # Crear producto en Pizzeta
+        producto = Producto.objects.create(
+            pizzeria=pizzeria,
+            id_externo=data.get("id_pro", id_pro),
+            nombre=data.get("nombre", f"Producto {id_pro}"),
+            descripcion=data.get("descripcion", ""),
+            precio=0,  # ⚠️ Ajusta si quieres traer precio de Firebird (si lo tienes disponible)
+            categoria="Firebird",
+            activo=True
+        )
+
+        return Response(ProductoSerializer(producto).data, status=status.HTTP_201_CREATED)

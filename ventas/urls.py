@@ -18,6 +18,11 @@ from ventas.views import (
     resumen_ventas,
     ventas_por_dia,
     ventas_ayer,
+    
+    FirebirdHctaordProxyAPIView,
+    FirebirdImportVentaAPIView,
+    CrearProductoDesdeFirebirdAPIView
+    
 )
 
 urlpatterns = [
@@ -44,4 +49,8 @@ urlpatterns = [
     path("ventas/resumen/", resumen_ventas, name="resumen-ventas"),
     path("ventas/por-dia/", ventas_por_dia, name="ventas-por-dia"),
     path("ventas/ayer/", ventas_ayer, name="ventas-ayer"),
+    
+    path("pizzerias/<int:pizzeria_id>/firebird/hctaord/", FirebirdHctaordProxyAPIView.as_view(), name="firebird-hctaord"),
+    path("pizzerias/<int:pizzeria_id>/ventas/importar-firebird/",FirebirdImportVentaAPIView.as_view(),name="importar-venta-firebird"),
+    path("pizzerias/<int:pizzeria_id>/productos/crear-desde-firebird/<int:id_pro>/",CrearProductoDesdeFirebirdAPIView.as_view(),name="crear-producto-desde-firebird"),
 ]
