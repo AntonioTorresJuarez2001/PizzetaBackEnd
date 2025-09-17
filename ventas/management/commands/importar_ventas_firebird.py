@@ -69,7 +69,7 @@ class Command(BaseCommand):
         productos_creados = 0
 
         for fecha in range(fecha_min, fecha_max + 1):
-            print(f"📆 Procesando fecha Firebird {fecha}...")
+            print(f"Procesando fecha Firebird {fecha}...")
             try:
                 registros = get_hctaord(params={"id_local": id_local, "fecha_ini": fecha, "fecha_fin": fecha})
             except Exception as e:
@@ -161,7 +161,7 @@ class Command(BaseCommand):
                         timestamp=now()
                     )
 
-                    self.stdout.write(f"✅ Venta importada: {folio}")
+                    self.stdout.write(f" Venta importada: {folio}")
                     importadas += 1
                     ventas_procesadas += 1
 

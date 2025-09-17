@@ -22,6 +22,7 @@ from .serializers import (
 )
 import requests
 from .services.firebird_hctaord import get_hctaord, get_producto_firebird
+from rest_framework.pagination import PageNumberPagination
 
 from drf_yasg.utils import swagger_auto_schema
 # ventas/views.py
@@ -37,6 +38,10 @@ import calendar
 # -----------------------------------------
 # 2) CRUD Ventas
 # ------------------------------------------
+
+class VentaPagination(PageNumberPagination):
+    page_size = 50  # cambia a 20, 100, etc. +
+
 class VentaListCreateAPIView(generics.ListCreateAPIView):
     """
     API para listar y registrar ventas de una pizzería específica.
@@ -80,6 +85,8 @@ class VentaListCreateAPIView(generics.ListCreateAPIView):
     """
     permission_classes = [IsAuthenticated, EmpleadoSoloLecturaPermission]
     serializer_class = VentaSerializer
+    pagination_class = VentaPagination 
+
 
     @swagger_auto_schema(
         tags=["Ventas"],
