@@ -97,12 +97,14 @@ STATIC_URL = "/static/"
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",  # para desarrollo local con Vite/React
+    "http://162.214.66.212:5173"
+
 ]
 
 
 CORS_ALLOWED_ORIGINS = [
     "http://162.214.66.212:5173",    # IP del backend 
-   # "http://162.214.158.180:5173",
+    "http://162.214.158.180:5173",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
@@ -118,8 +120,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
     "ALGORITHM": "HS256",
