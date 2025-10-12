@@ -34,21 +34,37 @@ from pizzerias.models import Pizzeria
 @swagger_auto_schema(
     method='get', 
     tags=["Token y Usuarios"], 
-    operation_description="Devuelve los datos del usuario autenticado, incluyendo ID, nombre de usuario, email y rol asignado."
+    operation_description="Devuelve los datos del usuario autenticado, incluyendo ID, nombre, email, rol y pizzerías asignadas si aplica."
 )
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def current_user(request):
     u = request.user
     perfil = getattr(u, "perfil", None)
+    rol = perfil.rol if perfil else "normal"
 
-    return Response({
+    data = {
         "id": u.id,
         "username": u.username,
         "email": u.email,
-        "rol": perfil.rol if perfil else "normal"
-    })
+        "rol": rol
+    }
 
+    # Si el usuario es dueño, incluir sus pizzerías e id_local (Firebird)
+    if rol == "dueno":
+        pizzerias = Pizzeria.objects.filter(dueno_asignaciones__dueno=u)
+        data["pizzerias"] = [
+            {
+                "id": p.id,
+                "nombre": p.nombre,
+                "id_local": p.id_local,
+                "zona": p.zona,
+                "telefono": p.telefono
+            }
+            for p in pizzerias
+        ]
+
+    return Response(data)
 
 class UsuarioPizzeriaRolListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -261,7 +277,6 @@ class EstablecerPinPlanoAPIView(APIView):
 
         return Response({"mensaje": "PIN Actualizado correctamente."})
 
-
 class ConsultarPinPlanoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -286,7 +301,6 @@ class ConsultarPinPlanoAPIView(APIView):
             return Response({"pin": pin_obj.pin})
         except TokenNumericoPlano.DoesNotExist:
             return Response({"pin": None})
-
 
 @csrf_exempt
 @swagger_auto_schema(
@@ -332,3 +346,22 @@ def verificar_pin_plano(request):
     pin_obj.save()
 
     return Response({"mensaje": "PIN válido y reemplazado"})
+
+
+class PizzeriasDelDuenoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        pizzerias = Pizzeria.objects.filter(dueno_asignaciones__dueno=user)
+        data = [
+            {
+                "id": p.id,
+                "nombre": p.nombre,
+                "id_local": p.id_local,   # conecta con Firebird
+                "zona": p.zona,
+                "telefono": p.telefono
+            }
+            for p in pizzerias
+        ]
+        return Response(data)
